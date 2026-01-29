@@ -337,7 +337,7 @@ Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
 ## 项目结构
 
 ```
-Doubao_sound_update/
+Simultaneous_Translation/
 ├── backend/                    # 后端代码
 │   ├── server.py              # WebSocket 服务器
 │   ├── volcengine_client.py   # 火山引擎客户端（aiohttp + protobuf）
