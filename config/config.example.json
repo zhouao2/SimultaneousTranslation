@@ -1,0 +1,27 @@
+{
+  "volcengine": {
+    "app_id": "your-app-id", //豆包同声传译API2.0
+    "access_key": "your-access-key",
+    "resource_id": "volc.service_type.10053"
+  },
+  "server": {
+    "host": "0.0.0.0",
+    "port": 8765,
+    "advertise_ip": ""
+  },
+  "audio": {
+    "sample_rate": 16000,
+    "channels": 1,
+    "bits_per_sample": 16,
+    "chunk_duration_ms": 80
+  },
+  "translation": {
+    "source_language": "zh",
+    "target_language": "en"
+  },
+  "tts": {
+    "speaker_id": "zh_female_shuangkuaisisi",
+    "comment": "speaker_id: 指定固定的 TTS 音色 ID。常用音色：zh_female_shuangkuaisisi（轻快女声双快）、zh_male_zhongyinshuni（稳重男声中音）、h_female_vv_uranus_bigtts（温柔女声Uranus）、en_female_amy（英文女声）等。使用固定音色可确保每次翻译音色一致。"
+  }
+}
+
