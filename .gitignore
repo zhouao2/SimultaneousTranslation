@@ -49,3 +49,4 @@ key.pem
 config/corrections.json
 config/*.bak
 config/* copy.*
+config/config.json

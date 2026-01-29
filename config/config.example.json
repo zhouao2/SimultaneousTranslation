@@ -1,6 +1,6 @@
 {
   "volcengine": {
-    "app_id": "your-app-id", //豆包同声传译API2.0
+    "app_id": "your-app-id",
     "access_key": "your-access-key",
     "resource_id": "volc.service_type.10053"
   },

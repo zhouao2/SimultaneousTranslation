@@ -62,8 +62,8 @@ conda --version
 
 **创建虚拟环境：**
 ```bash
-# 创建名为 doubao_sound 的 Python 3.8 环境
-conda create -n doubao_sound python=3.8
+# 创建名为 doubao_sound 的 Python 3.11 环境
+conda create -n doubao_sound python=3.11 -y
 ```
 
 **激活虚拟环境：**
