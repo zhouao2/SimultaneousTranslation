@@ -1,0 +1,51 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# 配置文件（包含敏感信息）
+config/config.json
+config/config.*.json
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.claude/
+*~
+
+# 日志
+*.log
+
+# 操作系统
+.DS_Store
+Thumbs.db
+
+ssl/cert.pem
+ssl/key.pem //SSL证书   
+key.pem
+# 个人配置文件（避免提交敏感信息）
+config/corrections.json
+config/*.bak
+config/* copy.*
