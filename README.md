@@ -556,10 +556,6 @@ netstat -ano | findstr :15677  # Windows
 - 发起 Pull Request
 - 联系开发者
 
-## 致谢
-
-感谢火山引擎提供的同声传译 API 服务。
-
 ## 许可证
 
 MIT
