@@ -1,4 +1,5 @@
 websockets>=12.0
 aiohttp>=3.9.0
 protobuf>=4.25.0
+grpcio>=1.60.0
 

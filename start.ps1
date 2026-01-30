@@ -1,18 +1,13 @@
 <#
 .SYNOPSIS
-  一键启动：自动加载 conda、激活环境并启动同声传译服务。
+  一键启动同声传译服务。
 
 .DESCRIPTION
-  - 自动加载 conda 的 PowerShell hook（使 conda activate 可用）
-  - 激活指定 conda 环境（默认：doubao_sound）
   - 启动服务（默认：python .\start_server.py --https）
 
   如果在其它电脑上提示"无法执行脚本/被系统阻止"，常见原因：
   - 脚本带下载标记（Zone.Identifier），需要解除阻止（Unblock）
   - ExecutionPolicy 限制（建议对当前用户放开到 RemoteSigned）
-
-.PARAMETER EnvName
-  conda 环境名（默认：doubao_sound）
 
 .PARAMETER Port
   服务端口（默认：15677）
@@ -24,7 +19,7 @@
   .\start.ps1
 
 .EXAMPLE
-  .\start.ps1 -EnvName doubao_sound -Port 15677
+  .\start.ps1 -Port 15677
 
 .EXAMPLE
   .\start.ps1 -Http
@@ -32,7 +27,6 @@
 
 [CmdletBinding()]
 param(
-  [string]$EnvName = "doubao_sound",
   [int]$Port = 15677,
   [switch]$Http
 )
@@ -76,26 +70,7 @@ try {
     throw "start_server.py not found (please run from project root)"
   }
 
-  # 1) Ensure conda is available
-  $condaCmd = Get-Command conda -ErrorAction SilentlyContinue
-  if (-not $condaCmd) {
-    throw "conda not found. Please install Anaconda/Miniconda and ensure conda is in PATH."
-  }
-
-  # 2) Load conda PowerShell hook
-  Write-Info "Loading conda PowerShell hook..."
-  $hookLines = (& conda "shell.powershell" "hook") 2>$null
-  if (-not $hookLines) {
-    throw "Failed to run 'conda shell.powershell hook'. Please check conda installation."
-  }
-  $hook = ($hookLines -join "`n")
-  Invoke-Expression $hook
-
-  # 3) Activate environment
-  Write-Info "Activating conda environment: $EnvName"
-  conda activate $EnvName
-
-  # 4) Start service
+  # Start service
   $argsList = @(".\start_server.py", "--port", "$Port")
   if (-not $Http) { $argsList += "--https" }
 
@@ -116,6 +91,5 @@ catch {
   Write-Host "  3) Set execution policy (recommended):" -ForegroundColor Gray
   Write-Host "     - Set-ExecutionPolicy -Scope CurrentUser RemoteSigned" -ForegroundColor Gray
   Write-Host "     - Or Set-ExecutionPolicy -Scope CurrentUser Bypass" -ForegroundColor Gray
-  Write-Host "  4) Initialize conda (once): conda init powershell, then reopen PowerShell" -ForegroundColor Gray
   exit 1
 }

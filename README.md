@@ -15,102 +15,26 @@
 - 👥 多查看端支持（广播模式）
 - 🎨 现代化三列布局界面
 
+## 系统要求
+
+- **Python**: 3.11 或更高版本
+- **操作系统**: Windows / Linux / macOS
+- **浏览器**: Chrome / Edge / Safari（推荐 Chrome 或 Edge 以获得最佳体验）
+
 ## 快速开始
 
-本指南将带你完成从零开始的完整安装和配置流程。如果你已经安装了 Miniconda3 和 Python 环境，可以直接跳到相关步骤。
+本指南将带你完成从零开始的完整安装和配置流程。
 
 **安装流程概览：**
-1. 安装 Miniconda3
-2. 创建并激活虚拟环境
-3. 安装 Python 依赖
-4. 配置火山引擎 API 凭证
-5. 配置 TTS 音色（可选）
-6. 生成 SSL 证书（移动设备需要）
-7. 启动服务器
-8. 打开前端页面
-9. 开始使用
+1. 安装 Python 依赖
+2. 配置火山引擎 API 凭证
+3. 配置 TTS 音色（可选）
+4. 生成 SSL 证书（移动设备需要）
+5. 启动服务器
+6. 打开前端页面
+7. 开始使用
 
-### 1. 安装 Miniconda3
-
-**Windows:**
-1. 下载 Miniconda3 安装程序：https://docs.conda.io/en/latest/miniconda.html
-2. 运行安装程序，使用默认设置
-3. 安装完成后，重新打开终端/PowerShell
-
-**Linux/macOS:**
-```bash
-# 下载 Miniconda3 安装脚本
-wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh  # Linux
-# 或
-curl -O https://repo.anaconda.com/miniconda/Miniconda3-latest-MacOSX-x86_64.sh  # macOS
-
-# 运行安装脚本
-bash Miniconda3-latest-*.sh
-
-# 重启终端或执行
-source ~/.bashrc  # Linux
-# 或
-source ~/.zshrc   # macOS
-```
-
-**验证安装：**
-```bash
-conda --version
-```
-
-### 2. 创建并激活虚拟环境
-
-**创建虚拟环境：**
-```bash
-# 创建名为 doubao_sound 的 Python 3.11 环境
-conda create -n doubao_sound python=3.11 -y
-```
-
-**激活虚拟环境：**
-
-Linux/macOS:
-```bash
-conda activate doubao_sound
-```
-
-Windows:
-```powershell
-# 方法 1: 直接激活（推荐）
-conda doubao_sound
-
-# 方法 2: 如果方法 1 不工作，先初始化 conda
-conda init powershell
-# 然后重新打开 PowerShell，再执行
-conda activate doubao_sound
-```
-
-**验证环境：**
-```bash
-# 应该显示 (doubao_sound) 在命令行提示符前
-python --version
-```
-
-**退出虚拟环境（可选）：**
-```bash
-conda deactivate
-```
-
-**常用 conda 命令：**
-```bash
-# 列出所有环境
-conda env list
-
-# 删除环境（如果需要重新创建）
-conda env remove -n doubao_sound
-
-# 导出环境配置（可选，用于备份）
-conda env export > environment.yml
-
-# 从配置文件创建环境（可选）
-conda env create -f environment.yml
-```
-
-### 3. 安装依赖
+### 1. 安装依赖
 
 ```bash
 pip install -r requirements.txt
@@ -125,7 +49,7 @@ pip install --upgrade pip
 pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
 ```
 
-### 4. 配置 API 凭证
+### 2. 配置 API 凭证
 
 复制配置文件模板并填入你的火山引擎 API 凭证：
 
@@ -138,7 +62,7 @@ cp config/config.example.json config/config.json
 - `access_key`: 火山引擎 Access Key
 - `resource_id`: 资源 ID（默认：volc.service_type.10053）
 
-### 5. TTS 音色配置（S2S 模式）
+### 3. TTS 音色配置（S2S 模式）
 
 
 **在豆包同声音传译2.0中无法更改音色，项目中的音色代码未清理**
@@ -176,7 +100,7 @@ cp config/config.example.json config/config.json
 - 如需固定音色，可指定 `speaker_id`
 - 具体可用的音色 ID 请参考火山引擎官方文档
 
-### 6. 生成 SSL 证书（移动设备访问需要）
+### 4. 生成 SSL 证书（移动设备访问需要）
 
 如果要在 iPad/手机 上使用麦克风功能，需要 HTTPS：
 
@@ -186,7 +110,7 @@ cp config/config.example.json config/config.json
 
 这会生成自签名 SSL 证书（保存在 `ssl/` 目录）。
 
-### 7. 启动服务器
+### 5. 启动服务器
 
 系统使用 `aiohttp` 在同一端口（默认 15677）同时提供 HTTP/HTTPS 和 WebSocket/WSS 服务。
 
@@ -224,16 +148,6 @@ Windows PowerShell：
 .\start.ps1 -Http
 ```
 
-**方式三：使用 conda 环境（Windows）**
-
-```powershell
-# 先激活 conda 环境
-conda doubao_sound
-
-# 然后启动服务器
-python .\start_server.py --https
-```
-
 **注意**：如果 PowerShell 提示执行策略错误，运行以下命令：
 ```powershell
 Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
@@ -249,7 +163,7 @@ Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
 - 本地访问地址：`http://localhost:15677` 或 `https://localhost:15677`
 - 局域网访问地址：`http://<你的IP>:15677` 或 `https://<你的IP>:15677`
 
-### 8. 打开前端页面
+### 6. 打开前端页面
 
 系统提供两种前端页面：
 
@@ -286,7 +200,7 @@ Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
 - 自签名证书会在浏览器显示安全警告，这是正常的，点击继续访问即可
 - 手机端的声音输出暂未修复完成， 仍然存在问题，默认关闭
 
-### 9. 开始使用
+### 7. 开始使用
 
 **控制端使用步骤（演讲者）：**
 
@@ -368,7 +282,7 @@ Simultaneous_Translation/
 
 ## 技术栈
 
-- **后端**: Python 3.8+, aiohttp, asyncio
+- **后端**: Python 3.11+, aiohttp, asyncio
 - **前端**: HTML5, JavaScript, Web Audio API, WebSocket
 - **API**: 火山引擎同声传译2.0（Protobuf 协议）
 - **音频处理**: Web Audio API, AudioWorklet
@@ -377,20 +291,6 @@ Simultaneous_Translation/
 ## 使用说明
 
 ### 启动系统
-
-**每次使用前，先激活虚拟环境：**
-
-Linux/macOS:
-```bash
-conda activate doubao_sound
-```
-
-Windows PowerShell:
-```powershell
-conda doubao_sound
-# 或
-conda activate doubao_sound
-```
 
 1. **启动后端服务器**
    ```bash
@@ -574,22 +474,6 @@ conda activate doubao_sound
 2. 使用 HTTPS 启动服务器：`python start_server.py --https`
 3. 在移动设备上使用 HTTPS 地址访问：`https://<电脑IP>:15677`
 
-### 3. conda 环境激活失败（Windows）
-
-**错误**: 无法执行 conda activate
-
-**解决方案**:
-```powershell
-# 方案 1: 初始化 conda
-conda init powershell
-# 然后重新打开 PowerShell
-
-# 方案 2: 直接使用 Python（跳过 conda）
-python .\start_server.py --https
-
-# 方案 3: 使用启动脚本
-.\start.ps1
-```
 
 ### 4. PowerShell 脚本执行失败
 

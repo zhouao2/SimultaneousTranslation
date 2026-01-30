@@ -2,7 +2,6 @@
 
 # 同声传译系统启动脚本（Linux/macOS）
 # - 默认启动 start_server.py（HTTP/HTTPS + WebSocket）
-# - 可选自动激活 conda 环境
 # - 可选安装依赖（requirements.txt）
 
 set -euo pipefail
@@ -13,25 +12,22 @@ cd "$SCRIPT_DIR"
 usage() {
   cat <<'EOF'
 用法：
-  ./start.sh [--https|--http] [--port <port>] [--conda-env <env>] [--install]
+  ./start.sh [--https|--http] [--port <port>] [--install]
 
 参数：
   --https           使用 HTTPS 启动（默认）
   --http            使用 HTTP 启动
   --port <port>     指定端口（默认：读取 config/config.json 或 15677）
-  --conda-env <env> 启动前自动 conda activate <env>
   --install         启动前安装 requirements.txt（python3 -m pip）
 
 示例：
   ./start.sh
   ./start.sh --http --port 15677
-  ./start.sh --conda-env doubao_sound --https
 EOF
 }
 
 USE_HTTPS=1
 PORT=""
-CONDA_ENV=""
 DO_INSTALL=0
 
 while [[ $# -gt 0 ]]; do
@@ -39,7 +35,6 @@ while [[ $# -gt 0 ]]; do
     --https) USE_HTTPS=1; shift ;;
     --http) USE_HTTPS=0; shift ;;
     --port) PORT="${2:-}"; shift 2 ;;
-    --conda-env) CONDA_ENV="${2:-}"; shift 2 ;;
     --install) DO_INSTALL=1; shift ;;
     -h|--help) usage; exit 0 ;;
     *) echo "未知参数：$1" >&2; usage; exit 1 ;;
@@ -55,18 +50,6 @@ if [ ! -f "config/config.json" ]; then
     exit 1
 fi
 
-# 可选：自动激活 conda 环境
-if [[ -n "$CONDA_ENV" ]]; then
-  if command -v conda >/dev/null 2>&1; then
-    echo "激活 conda 环境：$CONDA_ENV"
-    # shellcheck disable=SC1091
-    eval "$(conda shell.bash hook)"
-    conda activate "$CONDA_ENV"
-  else
-    echo "错误: 未找到 conda，但你传入了 --conda-env $CONDA_ENV" >&2
-    exit 1
-  fi
-fi
 
 # 可选：安装依赖（避免走错 pip，使用 python3 -m pip）
 if [[ "$DO_INSTALL" -eq 1 ]]; then
