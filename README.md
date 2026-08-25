@@ -26,6 +26,7 @@
 本指南将带你完成从零开始的完整安装和配置流程。
 
 **安装流程概览：**
+
 1. 安装 Python 依赖
 2. 配置火山引擎 API 凭证
 3. 配置 TTS 音色（可选）
@@ -41,6 +42,7 @@ pip install -r requirements.txt
 ```
 
 **如果遇到依赖安装问题，尝试：**
+
 ```bash
 # 更新 pip
 pip install --upgrade pip
@@ -58,11 +60,11 @@ cp config/config.example.json config/config.json
 ```
 
 编辑 `config/config.json`，填入以下信息:
+
 - `api_key`: 火山引擎 API Key（新版控制台获取）
 - `resource_id`: 资源 ID（默认：volc.service_type.10053）
 
 ### 3. TTS 音色配置（S2S 模式）
-
 
 **在豆包同声音传译2.0中无法更改音色，项目中的音色代码未清理**
 
@@ -78,6 +80,7 @@ cp config/config.example.json config/config.json
 ```
 
 **S2S 模式（推荐）：**
+
 - **`speaker_id` 留空**：启用自动声音复刻功能
   - 系统会自动从输入音频中提取说话人音色特征
   - 实现"0样本声音复刻"
@@ -88,6 +91,7 @@ cp config/config.example.json config/config.json
 如果指定 `speaker_id`，系统会使用指定的音色（会覆盖自动复刻功能）：
 
 **常用音色 ID：**
+
 - `zh_female_shuangkuaisisi` - 中文女声（双快思思）
 - `zh_male_zhongyinshuni` - 中文男声（中音书宁）
 - `zh_female_qingxin` - 中文女声（清新）
@@ -95,6 +99,7 @@ cp config/config.example.json config/config.json
 - `en_male_daniel` - 英文男声（Daniel）
 
 **注意：**
+
 - 推荐使用 S2S 模式（`speaker_id` 留空）以获得最佳体验
 - 如需固定音色，可指定 `speaker_id`
 - 具体可用的音色 ID 请参考火山引擎官方文档
@@ -116,16 +121,19 @@ cp config/config.example.json config/config.json
 **方式一：使用 Python 直接启动（跨平台）**
 
 HTTP 服务器（仅电脑使用）：
+
 ```bash
 python start_server.py
 ```
 
 HTTPS 服务器（支持移动设备，推荐）：
+
 ```bash
 python start_server.py --https
 ```
 
 指定端口：
+
 ```bash
 python start_server.py --https --port 15677
 ```
@@ -133,32 +141,38 @@ python start_server.py --https --port 15677
 **方式二：使用启动脚本**
 
 Linux/macOS：
+
 ```bash
 ./start.sh
 ```
 
 Windows PowerShell：
+
 ```powershell
 .\start.ps1
 ```
 
 或使用 HTTP（不推荐移动设备）：
+
 ```powershell
 .\start.ps1 -Http
 ```
 
 **注意**：如果 PowerShell 提示执行策略错误，运行以下命令：
+
 ```powershell
 Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
 ```
 
 **服务器说明：**
+
 - 默认端口：**15677**（可在 `config/config.json` 中配置）
 - HTTP/HTTPS 和 WebSocket/WSS 使用**同一端口**
 - WebSocket 路径：`/ws`
 - 静态文件路径：`/`（前端文件）
 
 启动后会显示：
+
 - 本地访问地址：`http://localhost:15677` 或 `https://localhost:15677`
 - 局域网访问地址：`http://<你的IP>:15677` 或 `https://<你的IP>:15677`
 
@@ -167,6 +181,7 @@ Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
 系统提供两种前端页面：
 
 **控制端页面（Controller）**
+
 - 负责音频采集和翻译处理
 - 支持麦克风和系统音频输入
 - 可调整音色、播放速度等设置
@@ -174,6 +189,7 @@ Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
 - 适用于：演讲者、主持人
 
 **查看端页面（Viewer）**
+
 - 只接收和显示翻译结果
 - 不发送音频，无需麦克风权限
 - 支持多个查看端同时连接
@@ -181,10 +197,12 @@ Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
 - 适用于：观众、投影仪、远程设备
 
 **本地访问（电脑）：**
+
 - 控制端：在浏览器中访问 `http://localhost:15677` 或 `https://localhost:15677`
 - 查看端：在浏览器中访问 `http://localhost:15677/viewer` 或 `https://localhost:15677/viewer`
 
 **iPad/手机访问：**
+
 1. 确保设备和电脑在同一 WiFi 网络
 2. **必须使用 HTTPS**：移动设备需要 HTTPS 才能使用麦克风功能
 3. 使用 `--https` 参数启动服务器
@@ -194,6 +212,7 @@ Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
    - Android Chrome：点击"高级" -> "继续访问"
 
 **注意**：
+
 - iOS Safari 和 Android Chrome 要求 HTTPS 连接才能访问麦克风
 - 如果使用 HTTP 访问，会显示"浏览器不支持音频采集功能"的错误
 - 自签名证书会在浏览器显示安全警告，这是正常的，点击继续访问即可
@@ -217,6 +236,7 @@ Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
 9. 译文将通过 TTS 自动播放（按顺序播放，不会重叠）
 
 **界面说明：**
+
 - **左侧控制区域**：包含所有控制按钮和设置选项
 - **右侧上方**：显示 ASR 语音识别原文（保留最近 8 条）
 - **右侧下方**：显示翻译后的文字（保留最近 8 条）
@@ -233,16 +253,19 @@ Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
 **使用场景示例：**
 
 **场景 1：会议演讲**
+
 - 演讲者使用 iPad（控制端）进行翻译
 - 观众通过手机或电脑（查看端）查看结果
 - 投影仪显示查看端页面给全场观众
 
 **场景 2：远程会议**
+
 - 主讲人使用控制端（需要麦克风权限）
 - 远程参会者使用查看端（无需麦克风权限）
 - 多个查看端可同时连接
 
 **场景 3：教学演示**
+
 - 老师使用控制端进行授课翻译
 - 学生通过查看端查看翻译结果
 - 支持大屏幕投影显示
@@ -292,19 +315,22 @@ Simultaneous_Translation/
 ### 启动系统
 
 1. **启动后端服务器**
+
    ```bash
    python backend/server.py
    ```
+
    或者使用启动脚本：
+
    ```bash
    ./start.sh
    ```
-
 2. **打开前端页面**
+
    - 在浏览器中打开 `frontend/index.html`
    - 或使用本地服务器（见上文）
-
 3. **开始翻译**
+
    - 点击"开始翻译"按钮
    - 允许浏览器访问麦克风
    - 开始说话，系统将实时显示原文和译文
@@ -315,27 +341,33 @@ Simultaneous_Translation/
 在 `config/config.json` 中配置以下参数：
 
 **火山引擎配置：**
+
 - `volcengine.api_key`: 火山引擎 API Key
 - `volcengine.resource_id`: 资源 ID（默认：volc.service_type.10053）
 
 **服务器配置：**
+
 - `server.host`: 服务器地址（默认：0.0.0.0，允许外部访问）
 - `server.port`: 服务器端口（默认：15677）
 
 **音频配置：**
+
 - `audio.sample_rate`: 采样率（默认：16000）
 - `audio.channels`: 声道数（默认：1，单声道）
 - `audio.bits_per_sample`: 位深度（默认：16）
 - `audio.chunk_duration_ms`: 音频块时长（默认：80ms）
 
 **翻译配置：**
+
 - `translation.source_language`: 源语言（默认：zh，中文）
 - `translation.target_language`: 目标语言（默认：en，英文）
 
 **TTS 配置：**
+
 - `tts.speaker_id`: TTS 音色 ID（留空启用 S2S 自动声音复刻，推荐）
 
 **文本纠正配置（可选）：**
+
 - 在 `config/corrections.json` 中配置文本纠正规则
 - 示例：
   ```json
@@ -348,6 +380,7 @@ Simultaneous_Translation/
 - 可根据实际识别错误添加更多规则
 
 **文本过滤配置（可选）：**
+
 - 在 `backend/text_filter.py` 中配置敏感词列表
 - 默认替换为 `***`
 - 可自定义替换字符
@@ -379,6 +412,7 @@ Simultaneous_Translation/
 系统包含两层文本处理机制：
 
 **1. 文本纠正（Text Correction）**
+
 - 自动识别并纠正常见的语音识别错误
 - 配置文件：`config/corrections.json`
 - 示例纠正规则：
@@ -391,12 +425,14 @@ Simultaneous_Translation/
 - 可自定义添加更多纠正规则
 
 **2. 敏感词过滤（Text Filtering）**
+
 - 自动过滤敏感词汇
 - 默认替换为 `***`
 - 可配置替换字符
 - 确保输出内容安全合规
 
 **处理流程**：
+
 1. 接收翻译结果
 2. 应用文本纠正规则
 3. 过滤敏感词
@@ -407,17 +443,20 @@ Simultaneous_Translation/
 系统支持多个查看端同时连接：
 
 **控制端**（Controller）：
+
 - 负责音频采集和翻译
 - 一个会话只能有一个控制端
 - 访问地址：`https://<IP>:15677/`
 
 **查看端**（Viewer）：
+
 - 只接收翻译结果，不发送音频
 - 支持多个查看端同时连接
 - 访问地址：`https://<IP>:15677/viewer`
 - 适用于：投影仪、远程设备等
 
 **使用场景**：
+
 - 演讲者在 iPad（控制端）上翻译
 - 观众通过多个设备（查看端）查看结果
 
@@ -430,16 +469,19 @@ Simultaneous_Translation/
 ## 性能优化建议
 
 ### 网络优化
+
 - 使用有线网络连接以提高稳定性
 - 确保防火墙允许 15677 端口访问
 - 移动设备使用 5GHz WiFi 以降低延迟
 
 ### 音频优化
+
 - 调整静音阈值以适应环境噪音
 - 启用噪音抑制功能以提高识别准确率
 - 根据需要调整环境音增益（避免过载）
 
 ### 系统优化
+
 - 使用 Chrome 或 Edge 浏览器（最佳 Web Audio API 支持）
 - 关闭不必要的后台应用以降低延迟
 - 确保系统时间同步（影响 SSL 证书验证）
@@ -468,16 +510,17 @@ Simultaneous_Translation/
 **原因**: iOS Safari 和 Android Chrome 要求 HTTPS 连接才能访问麦克风
 
 **解决方案**:
+
 1. 生成 SSL 证书：`./generate_cert.sh`
 2. 使用 HTTPS 启动服务器：`python start_server.py --https`
 3. 在移动设备上使用 HTTPS 地址访问：`https://<电脑IP>:15677`
-
 
 ### 4. PowerShell 脚本执行失败
 
 **错误**: 无法加载文件，因为在此系统上禁止运行脚本
 
 **解决方案**:
+
 ```powershell
 Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
 ```
@@ -493,6 +536,7 @@ Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
 **原因**: 使用自签名证书
 
 **解决方案**:
+
 - **iOS Safari**: 点击"显示详细信息" → "访问此网站"
 - **Android Chrome**: 点击"高级" → "继续访问"
 - 这是正常现象，自签名证书仅用于开发测试
@@ -502,6 +546,7 @@ Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
 **错误**: `Address already in use` 或 `端口已被占用`
 
 **解决方案**:
+
 ```bash
 # 查找占用端口的进程
 lsof -i :15677  # Linux/macOS
@@ -517,6 +562,7 @@ netstat -ano | findstr :15677  # Windows
 ## 更新日志
 
 ### 最新修复
+
 - ✅ 修复 aiohttp WebSocket `send_bytes()` 方法调用问题
 - ✅ 添加 favicon.ico 处理器，避免 404 错误
 - ✅ 修复 Windows PowerShell 脚本编码问题（UTF-8 without BOM）
@@ -526,16 +572,19 @@ netstat -ano | findstr :15677  # Windows
 ## 技术亮点
 
 ### 1. aiohttp + Protobuf 实现
+
 - 使用 `aiohttp` 替代 `websockets` 库，提高兼容性
 - 使用 Protobuf 序列化，减小数据传输量
 - 正确使用 `send_bytes()` 方法发送二进制数据
 
 ### 2. 多客户端架构
+
 - 支持控制端和查看端分离
 - 广播机制确保所有查看端同步更新
 - 状态同步机制支持新查看端获取历史记录
 
 ### 3. 音频处理链
+
 - Web Audio API 实时音频处理
 - 动态范围压缩
 - 均衡器调整
@@ -543,6 +592,7 @@ netstat -ano | findstr :15677  # Windows
 - 噪音抑制和静音检测
 
 ### 4. 跨平台支持
+
 - Linux/macOS 使用 shell 脚本
 - Windows 使用 PowerShell 脚本
 - 统一的 Python 启动脚本
@@ -550,6 +600,7 @@ netstat -ano | findstr :15677  # Windows
 ## 贡献与反馈
 
 如有问题或建议，欢迎：
+
 - 提交 Issue
 - 发起 Pull Request
 - 联系开发者
@@ -557,4 +608,3 @@ netstat -ano | findstr :15677  # Windows
 ## 许可证
 
 MIT
-

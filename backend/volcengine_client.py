@@ -99,9 +99,15 @@ class VolcengineASTClient:
                 max_msg_size=1000000000  # 1GB
             )
             # 记录服务端返回的 logid，便于定位问题
-            logid = self.websocket.headers.get("X-Tt-Logid")
-            if logid:
-                logger.info(f"服务端 logid: {logid}")
+            # aiohttp 的 ClientWebSocketResponse 没有公开 headers 属性，
+            # 响应头在内部的 _response 上，获取失败不影响连接
+            try:
+                response_headers = self.websocket._response.headers
+                logid = response_headers.get("X-Tt-Logid")
+                if logid:
+                    logger.info(f"服务端 logid: {logid}")
+            except AttributeError:
+                pass
             self.connected = True
             logger.info("已连接到火山引擎 API")
 
