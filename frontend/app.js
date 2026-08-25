@@ -199,8 +199,15 @@ class TranslationApp {
             }
             
             this.sourceLanguageSelect.addEventListener('change', (e) => {
-                this.sourceLanguage = e.target.value;
-                localStorage.setItem('sourceLanguage', e.target.value);
+                const newLang = e.target.value;
+                // 火山引擎 S2S 模式约束：源语言或目标语言至少一个为中文/英语
+                if (!this.isLanguagePairValid(newLang, this.targetLanguage)) {
+                    e.target.value = this.sourceLanguage;  // 回退选择
+                    this.showWarning('源语言和目标语言中至少需要一个是中文或英语');
+                    return;
+                }
+                this.sourceLanguage = newLang;
+                localStorage.setItem('sourceLanguage', newLang);
                 console.log('源语言已设置为:', this.sourceLanguage);
                 this.sendLanguageUpdate();
             });
@@ -218,13 +225,32 @@ class TranslationApp {
             }
             
             this.targetLanguageSelect.addEventListener('change', (e) => {
-                this.targetLanguage = e.target.value;
-                localStorage.setItem('targetLanguage', e.target.value);
+                const newLang = e.target.value;
+                // 火山引擎 S2S 模式约束：源语言或目标语言至少一个为中文/英语
+                if (!this.isLanguagePairValid(this.sourceLanguage, newLang)) {
+                    e.target.value = this.targetLanguage;  // 回退选择
+                    this.showWarning('源语言和目标语言中至少需要一个是中文或英语');
+                    return;
+                }
+                this.targetLanguage = newLang;
+                localStorage.setItem('targetLanguage', newLang);
                 console.log('目标语言已设置为:', this.targetLanguage);
                 this.sendLanguageUpdate();
             });
         }
-        
+
+        // 兜底：恢复的本地存储值若为无效组合（双方都不是中文/英语），重置为 zh -> en
+        if (this.sourceLanguageSelect && this.targetLanguageSelect &&
+            !this.isLanguagePairValid(this.sourceLanguage, this.targetLanguage)) {
+            console.warn('本地存储的语言组合无效，重置为 zh -> en');
+            this.sourceLanguage = 'zh';
+            this.targetLanguage = 'en';
+            this.sourceLanguageSelect.value = 'zh';
+            this.targetLanguageSelect.value = 'en';
+            localStorage.setItem('sourceLanguage', 'zh');
+            localStorage.setItem('targetLanguage', 'en');
+        }
+
         // 初始化字体大小控制（滑块）
         this.updateFontSizeDisplay = () => {
             if (this.fontSizeValueEl) {
@@ -1091,6 +1117,15 @@ class TranslationApp {
         return buffer;
     }
     
+    isLanguagePairValid(sourceLang, targetLang) {
+        /**
+         * 校验语言组合是否满足火山引擎 S2S 模式约束：
+         * 源语言或目标语言至少一个为中文（zh）或英语（en）
+         */
+        return sourceLang === 'zh' || sourceLang === 'en' ||
+               targetLang === 'zh' || targetLang === 'en';
+    }
+
     sendLanguageUpdate() {
         /**
          * 发送语言更新请求到后端

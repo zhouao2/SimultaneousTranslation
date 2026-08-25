@@ -435,6 +435,20 @@ class TranslationServer:
                     source_lang = data.get("source_language", "zh")
                     target_lang = data.get("target_language", "en")
                     logger.info(f"收到语言更新请求: source_language={source_lang}, target_language={target_lang}")
+
+                    # 校验：S2S 模式要求源语言或目标语言至少一个为中文/英语
+                    if source_lang not in ("zh", "en") and target_lang not in ("zh", "en"):
+                        logger.warning(f"无效的语言组合: {source_lang} -> {target_lang}（必须有一方为 zh/en）")
+                        await self._send_to_client({
+                            "type": "error",
+                            "message": f"无效的语言组合: {source_lang} -> {target_lang}，源语言和目标语言中至少需要一个是中文或英语"
+                        })
+                        return
+
+                    # 更新配置，保证后续重连也使用新语言
+                    self.config.setdefault("translation", {})
+                    self.config["translation"]["source_language"] = source_lang
+                    self.config["translation"]["target_language"] = target_lang
                     
                     # 如果客户端已连接，需要重新启动会话以应用新语言
                     if self.volcengine_client and self.volcengine_client.connected:
@@ -465,7 +479,12 @@ class TranslationServer:
                                 "message": f"语言设置已保存: {source_lang} -> {target_lang}"
                             })
                     else:
-                        logger.warning("客户端未连接，无法更新语言设置")
+                        # 客户端未连接，配置已更新，下次连接时生效
+                        logger.info("客户端未连接，语言设置已保存到配置，将在连接时应用")
+                        await self._send_to_client({
+                            "type": "language_updated",
+                            "message": f"语言设置已保存: {source_lang} -> {target_lang}"
+                        })
                 elif msg_type == "update_voice":
                     # 更新TTS音色
                     speaker_id = data.get("speaker_id", "")
