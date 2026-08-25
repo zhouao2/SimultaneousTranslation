@@ -740,7 +740,8 @@ class TranslationApp {
     
     async stop() {
         this.isRecording = false;
-        this.clearRoom();  // 主动结束：清除房间，下次开始翻译进入新房间
+        // 注意：停止翻译不清除房间——中途停止再开始时恢复同一房间，
+        // 观众已拿到的链接/二维码继续有效（房间在服务端保留 5 分钟，超时或刷新页面才开新场）
         
         // 发送停止消息给后端（通知查看端）
         if (this.ws && this.ws.readyState === WebSocket.OPEN) {
@@ -1229,7 +1230,8 @@ class TranslationApp {
     }
 
     clearRoom() {
-        /** 主动结束会议时清除房间，下次连接开新房间 */
+        /** 强制清除房间状态（当前无调用方；停止翻译已改为保留房间以便恢复本场，
+         *  预留给将来"结束本场/开新场"按钮使用） */
         this.roomId = null;
         try {
             sessionStorage.removeItem('st_room');
