@@ -1,6 +1,7 @@
 """
 访问控制数据层：申请、访问码、会话、用量计量、审计日志（SQLite）
 """
+import logging
 import os
 import sqlite3
 import secrets
@@ -8,6 +9,8 @@ import string
 import threading
 from datetime import datetime, timedelta
 from typing import Optional
+
+logger = logging.getLogger(__name__)
 
 # 访问码字符集：去掉易混淆字符 0/O/1/I/L
 CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
@@ -278,12 +281,26 @@ class AccessDB:
                 "UPDATE sessions SET ended_at = ? WHERE id = ?", (now_iso(), session_id))
 
     def tick_session(self, session_id: int, _locked: bool = False):
-        """按墙钟更新会话时长，并同步刷新访问码累计用量（= 该码所有会话时长之和）"""
+        """按墙钟更新会话时长，并同步刷新访问码累计用量（= 该码所有会话时长之和）
+
+        时长统一用 Python 本地时间计算（started_at 与当前时间均为本地 ISO 字符串），
+        不再混用 SQLite 的 julianday('now','localtime') 解析 Python 时间戳，
+        避免时区/夏令时切换或字符串解析差异导致时长算错。
+        """
         def _do():
+            row = self._conn.execute(
+                "SELECT started_at FROM sessions WHERE id = ? AND ended_at IS NULL",
+                (session_id,)).fetchone()
+            if not row:
+                return
+            try:
+                elapsed = (datetime.now() - datetime.fromisoformat(row["started_at"])).total_seconds()
+            except ValueError:
+                logger.warning(f"会话 #{session_id} 的 started_at 格式异常，跳过时长刷新: {row['started_at']!r}")
+                return
             self._conn.execute(
-                """UPDATE sessions SET wall_sec =
-                   (julianday('now', 'localtime') - julianday(started_at)) * 86400.0
-                   WHERE id = ? AND ended_at IS NULL""", (session_id,))
+                "UPDATE sessions SET wall_sec = ? WHERE id = ?",
+                (max(0.0, elapsed), session_id))
             self._conn.execute(
                 """UPDATE codes SET used_sec = (
                        SELECT COALESCE(SUM(wall_sec), 0) FROM sessions WHERE code_id = codes.id

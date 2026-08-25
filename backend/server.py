@@ -769,35 +769,42 @@ class TranslationServer:
                 except Exception as e:
                     logger.error(f"记录用量失败（不影响翻译功能）: {e}")
 
-            # 更新会话状态（先纠正，再过滤，最后缓存）
+            # 确保 text 字段存在且为字符串
+            if "text" not in data:
+                logger.warning(f"数据中缺少 'text' 字段: {data}")
+                data["text"] = ""
+            elif data["text"] is None:
+                logger.warning(f"数据中 'text' 字段为 None: {data}")
+                data["text"] = ""
+
+            # 纠正 + 过滤敏感词只执行一次，会话状态与转发复用同一结果（避免重复处理）
+            if data["text"]:
+                original_text = data["text"]
+                # 1. 纠正识别错误 2. 过滤敏感词
+                corrected_text = correct_text(original_text)
+                filtered_text = filter_text(corrected_text, replacement="***")
+                if corrected_text != original_text:
+                    logger.debug(f"文本已纠正，原始: '{original_text[:50]}...', 纠正后: '{corrected_text[:50]}...'")
+                if filtered_text != corrected_text:
+                    logger.debug(f"文本已过滤敏感词，原始长度: {len(corrected_text)}, 过滤后长度: {len(filtered_text)}")
+                data["text"] = filtered_text
+            text = data["text"]
+
+            # 更新会话状态（直接使用已纠正 + 过滤后的文本）
             if self.session:
                 if event == 651:  # SourceSubtitleResponse
-                    if text:
-                        corrected_text = correct_text(text)
-                        filtered_text = filter_text(corrected_text, replacement="***")
-                        self.session.current_source_text = filtered_text
-                    else:
-                        self.session.current_source_text = ""
+                    self.session.current_source_text = text
                 elif event == 652:  # SourceSubtitleEnd
                     if text:
-                        corrected_text = correct_text(text)
-                        filtered_text = filter_text(corrected_text, replacement="***")
-                        self.session.completed_source_lines.append(filtered_text)
+                        self.session.completed_source_lines.append(text)
                         if len(self.session.completed_source_lines) > self.session.max_history_lines:
                             self.session.completed_source_lines.pop(0)
                         self.session.current_source_text = ""
                 elif event == 654:  # TranslationSubtitleResponse
-                    if text:
-                        corrected_text = correct_text(text)
-                        filtered_text = filter_text(corrected_text, replacement="***")
-                        self.session.current_target_text = filtered_text
-                    else:
-                        self.session.current_target_text = ""
+                    self.session.current_target_text = text
                 elif event == 655:  # TranslationSubtitleEnd
                     if text:
-                        corrected_text = correct_text(text)
-                        filtered_text = filter_text(corrected_text, replacement="***")
-                        self.session.completed_target_lines.append(filtered_text)
+                        self.session.completed_target_lines.append(text)
                         if len(self.session.completed_target_lines) > self.session.max_history_lines:
                             self.session.completed_target_lines.pop(0)
                         self.session.current_target_text = ""
@@ -827,27 +834,6 @@ class TranslationServer:
                 }.get(event, f"Unknown({event})")
                 logger.info(f"📤 转发翻译数据到前端: {event_name}, text='{text}' (类型: {type(text).__name__}, 长度: {len(text) if text else 0})")
                 logger.debug(f"完整 data 对象: {data}")
-            
-            # 确保 text 字段存在且为字符串
-            if "text" not in data:
-                logger.warning(f"数据中缺少 'text' 字段: {data}")
-                data["text"] = ""
-            elif data["text"] is None:
-                logger.warning(f"数据中 'text' 字段为 None: {data}")
-                data["text"] = ""
-            
-            # 先纠正文本，再过滤敏感词
-            if data.get("text"):
-                original_text = data["text"]
-                # 1. 纠正识别错误
-                corrected_text = correct_text(original_text)
-                # 2. 过滤敏感词
-                filtered_text = filter_text(corrected_text, replacement="***")
-                if corrected_text != original_text:
-                    logger.debug(f"文本已纠正，原始: '{original_text[:50]}...', 纠正后: '{corrected_text[:50]}...'")
-                if filtered_text != corrected_text:
-                    logger.debug(f"文本已过滤敏感词，原始长度: {len(corrected_text)}, 过滤后长度: {len(filtered_text)}")
-                data["text"] = filtered_text
             
             # 转发给控制端
             message_to_send = {
