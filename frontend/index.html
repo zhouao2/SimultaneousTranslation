@@ -6,7 +6,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>同声传译 · 实时翻译</title>
-    <link rel="stylesheet" href="styles.css?v=20260829">
+    <link rel="stylesheet" href="styles.css?v=20260830">
     <!-- Opus 解码库 -->
     <script type="module">
         (async () => {
@@ -88,7 +88,20 @@
                             <span class="toggle-slider"></span>
                         </label>
                     </div>
-                    <!-- 高级设置折叠区域 -->
+                    <!-- 本场查看端分享卡（房间就绪后显示） -->
+                    <div class="share-card hidden" id="viewerShareCard">
+                        <div class="share-card-title">用户查看端</div>
+                        <div class="share-card-url" id="viewerShareUrl" title="点击复制"></div>
+                        <div class="share-card-actions">
+                            <button type="button" class="btn btn-share" id="copyViewerLinkBtn">复制链接</button>
+                            <button type="button" class="btn btn-share" id="showQrBtn">二维码</button>
+                        </div>
+                    </div>
+
+                <button id="testMicBtn" class="btn btn-test">测试麦克风</button>
+                <button id="startBtn" class="btn btn-primary">开始翻译</button>
+                <button id="stopBtn" class="btn btn-secondary" disabled>停止翻译</button>
+                                    <!-- 高级设置折叠区域 -->
                     <div class="advanced-settings-collapsible">
                         <button class="collapsible-header" id="advancedSettingsToggle">
                             <span>高级设置</span>
@@ -154,9 +167,6 @@
                             </div>
                         </div>
                     </div>
-                <button id="testMicBtn" class="btn btn-test">测试麦克风</button>
-                <button id="startBtn" class="btn btn-primary">开始翻译</button>
-                <button id="stopBtn" class="btn btn-secondary" disabled>停止翻译</button>
             </div>
             
             <div class="audio-test-panel" id="audioTestPanel" style="display: none;">
@@ -227,7 +237,8 @@
         </main>
     </div>
 
-    <script src="app.js?v=20260829"></script>
+    <script src="qrcode.min.js?v=20260830"></script>
+    <script src="app.js?v=20260831"></script>
 </body>
 </html>
 

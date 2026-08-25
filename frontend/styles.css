@@ -109,6 +109,149 @@ header {
     cursor: not-allowed;
 }
 
+/* ===== 本场查看端分享卡 ===== */
+.share-card {
+    border: 1.5px solid #2ecc71;
+    background: rgba(46, 204, 113, 0.08);
+    border-radius: 10px;
+    padding: 12px 14px;
+    margin: 6px 0 10px;
+}
+
+.share-card-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: #1e8e5a;
+    margin-bottom: 6px;
+}
+
+.share-card-url {
+    font-family: monospace;
+    font-size: 12px;
+    color: #333;
+    background: #fff;
+    border: 1px solid #dfe6ee;
+    border-radius: 6px;
+    padding: 7px 10px;
+    margin-bottom: 10px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    cursor: pointer;
+    user-select: all;
+}
+
+.share-card-url:hover {
+    border-color: #2ecc71;
+}
+
+.share-card-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.btn-share {
+    flex: 1;
+    padding: 8px 10px;
+    font-size: 13px;
+    border: none;
+    border-radius: 7px;
+    cursor: pointer;
+    font-weight: 600;
+    color: #fff;
+    background: #2ecc71;
+    transition: background 0.15s;
+}
+
+.btn-share:hover {
+    background: #27ae60;
+}
+
+.btn-share:active {
+    transform: scale(0.97);
+}
+
+/* 二维码浮层 */
+.qr-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(20, 24, 40, 0.72);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+}
+
+.qr-panel {
+    background: #fff;
+    border-radius: 14px;
+    padding: 22px 26px;
+    text-align: center;
+    box-shadow: 0 16px 50px rgba(0, 0, 0, 0.3);
+    max-width: 90vw;
+}
+
+.qr-panel h3 {
+    font-size: 15px;
+    color: #1a1a2e;
+    margin-bottom: 4px;
+}
+
+.qr-panel .qr-hint {
+    font-size: 12.5px;
+    color: #888;
+    margin-bottom: 14px;
+}
+
+.qr-panel .qr-img {
+    display: inline-block;
+    padding: 10px;
+    border: 1px solid #e8ecf3;
+    border-radius: 10px;
+    background: #fff;
+}
+
+.qr-panel .qr-img svg,
+.qr-panel .qr-img img {
+    display: block;
+}
+
+.qr-panel .qr-close {
+    margin-top: 14px;
+    padding: 7px 22px;
+    border: none;
+    border-radius: 7px;
+    background: #667eea;
+    color: #fff;
+    font-size: 13px;
+    cursor: pointer;
+}
+
+.qr-panel .qr-close:hover {
+    background: #5a6fd8;
+}
+
+/* 轻量 toast */
+.app-toast {
+    position: fixed;
+    top: 18px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #24243e;
+    color: #fff;
+    padding: 9px 20px;
+    border-radius: 9px;
+    font-size: 13.5px;
+    z-index: 10000;
+    box-shadow: 0 8px 26px rgba(0, 0, 0, 0.28);
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+.app-toast.show {
+    opacity: 1;
+}
+
 .page-fullscreen-btn:hover {
     background: rgba(255, 255, 255, 0.3);
     opacity: 1;

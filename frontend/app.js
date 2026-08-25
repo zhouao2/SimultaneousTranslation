@@ -621,7 +621,15 @@ class TranslationApp {
             this.updateViewerLink();
         }
 
-        // 加载当前访问码信息（使用人/主题），展示在信息面板
+        // 分享卡：复制链接 / 二维码
+        const copyBtn = document.getElementById('copyViewerLinkBtn');
+        if (copyBtn) copyBtn.addEventListener('click', () => this.copyViewerLink());
+        const qrBtn = document.getElementById('showQrBtn');
+        if (qrBtn) qrBtn.addEventListener('click', () => this.showQrOverlay());
+        const shareUrlEl = document.getElementById('viewerShareUrl');
+        if (shareUrlEl) shareUrlEl.addEventListener('click', () => this.copyViewerLink());
+
+        // 加载当前访问码信息（使用人/主题），展示在页面上方
         this.loadCodeInfo();
     }
 
@@ -1213,6 +1221,7 @@ class TranslationApp {
             sessionStorage.setItem('st_room', JSON.stringify({roomId, ts: Date.now()}));
         } catch (e) {}
         this.updateViewerLink();
+        this.updateShareCard();
     }
 
     clearRoom() {
@@ -1222,6 +1231,104 @@ class TranslationApp {
             sessionStorage.removeItem('st_room');
         } catch (e) {}
         this.updateViewerLink();
+        this.updateShareCard();
+    }
+
+    getViewerUrl() {
+        /** 本场查看端完整链接 */
+        if (!this.roomId) return '';
+        return `${window.location.origin}/viewer?room=${encodeURIComponent(this.roomId)}`;
+    }
+
+    updateShareCard() {
+        /** 分享卡：房间就绪后显示，含完整链接 + 复制/二维码入口 */
+        const card = document.getElementById('viewerShareCard');
+        const urlEl = document.getElementById('viewerShareUrl');
+        if (!card || !urlEl) return;
+        const url = this.getViewerUrl();
+        if (url) {
+            urlEl.textContent = url;
+            card.classList.remove('hidden');
+        } else {
+            card.classList.add('hidden');
+        }
+    }
+
+    showToast(text) {
+        /** 轻量提示（不打断操作） */
+        let t = document.querySelector('.app-toast');
+        if (!t) {
+            t = document.createElement('div');
+            t.className = 'app-toast';
+            document.body.appendChild(t);
+        }
+        t.textContent = text;
+        t.classList.add('show');
+        clearTimeout(this._toastTimer);
+        this._toastTimer = setTimeout(() => t.classList.remove('show'), 2200);
+    }
+
+    async copyViewerLink() {
+        /** 复制查看端链接（clipboard API 不可用时回退 execCommand） */
+        const url = this.getViewerUrl();
+        if (!url) return;
+        try {
+            if (navigator.clipboard && window.isSecureContext) {
+                await navigator.clipboard.writeText(url);
+            } else {
+                const ta = document.createElement('textarea');
+                ta.value = url;
+                ta.style.cssText = 'position:fixed;opacity:0;';
+                document.body.appendChild(ta);
+                ta.select();
+                document.execCommand('copy');
+                ta.remove();
+            }
+            this.showToast('查看端链接已复制，去分享吧');
+        } catch (e) {
+            this.showToast('复制失败，请长按链接手动复制');
+        }
+    }
+
+    showQrOverlay() {
+        /** 二维码浮层：扫码进入本场查看端 */
+        if (!this.roomId) return;
+        if (typeof window.qrcode !== 'function') {
+            this.showToast('二维码组件加载失败，请使用复制链接');
+            return;
+        }
+        const url = this.getViewerUrl();
+        let overlay = document.getElementById('qrOverlay');
+        if (!overlay) {
+            overlay = document.createElement('div');
+            overlay.id = 'qrOverlay';
+            overlay.className = 'qr-overlay';
+            overlay.innerHTML = `
+                <div class="qr-panel">
+                    <h3>扫码进入本场查看端</h3>
+                    <div class="qr-hint">观众用手机相机/微信扫码即可打开</div>
+                    <div class="qr-img" id="qrImg"></div>
+                    <br>
+                    <button type="button" class="qr-close">关闭</button>
+                </div>`;
+            overlay.addEventListener('click', (e) => {
+                if (e.target === overlay || e.target.classList.contains('qr-close')) {
+                    overlay.remove();
+                }
+            });
+            document.body.appendChild(overlay);
+        }
+        const img = overlay.querySelector('#qrImg');
+        try {
+            const qr = window.qrcode(0, 'M');
+            qr.addData(url);
+            qr.make();
+            img.innerHTML = qr.createSvgTag({cellSize: 9, margin: 3});
+        } catch (e) {
+            console.error('生成二维码失败:', e);
+            this.showToast('二维码生成失败，请使用复制链接');
+            overlay.remove();
+        }
     }
 
     updateViewerLink() {
