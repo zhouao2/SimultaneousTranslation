@@ -200,7 +200,21 @@ header {
 .qr-panel .qr-hint {
     font-size: 12.5px;
     color: #888;
+    margin-bottom: 10px;
+}
+
+.qr-panel .qr-access-code {
+    font-size: 14px;
+    color: #1a1a2e;
     margin-bottom: 14px;
+}
+
+.qr-panel .qr-access-code span {
+    font-family: monospace;
+    font-size: 17px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    color: #5a4a9e;
 }
 
 .qr-panel .qr-img {

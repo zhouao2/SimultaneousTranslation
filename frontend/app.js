@@ -1302,6 +1302,8 @@ class TranslationApp {
             return;
         }
         const url = this.getViewerUrl();
+        // 访问码来自 /api/me（loadCodeInfo 已缓存），供无法扫码的观众手动输入
+        const accessCode = this.codeInfo ? (this.codeInfo.code || '') : '';
         let overlay = document.getElementById('qrOverlay');
         if (!overlay) {
             overlay = document.createElement('div');
@@ -1311,6 +1313,7 @@ class TranslationApp {
                 <div class="qr-panel">
                     <h3>扫码进入本场查看端</h3>
                     <div class="qr-hint">观众用手机相机/微信扫码即可打开</div>
+                    ${accessCode ? '<div class="qr-access-code">访问码：<span></span></div>' : ''}
                     <div class="qr-img" id="qrImg"></div>
                     <br>
                     <button type="button" class="qr-close">关闭</button>
@@ -1322,6 +1325,8 @@ class TranslationApp {
             });
             document.body.appendChild(overlay);
         }
+        const codeEl = overlay.querySelector('.qr-access-code span');
+        if (codeEl && accessCode) codeEl.textContent = accessCode;
         const img = overlay.querySelector('#qrImg');
         try {
             const qr = window.qrcode(0, 'M');
