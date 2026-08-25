@@ -280,6 +280,19 @@ Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
 
 系统内置基于**访问码**的权限控制和用量/成本统计：
 
+### 生产部署（Linux + systemd）
+
+推荐用 systemd 托管（崩溃自动重启、开机自启、journald 日志、每日备份）：
+
+```bash
+# 1. 把项目拷到 Linux 服务器（确保 config/config.json 已填好）
+# 2. 在项目目录执行：
+sudo bash deploy/deploy-linux.sh
+# 3. 完成。升级时拉取最新代码后重跑同一脚本即可（数据与证书自动保留）
+```
+
+默认部署到 `/opt/simtrans`，端口 15677，可用环境变量覆盖（`DEPLOY_DIR=... SERVICE_USER=... PORT=... sudo -E bash deploy/deploy-linux.sh`）。常用运维命令：`systemctl status simtrans`、`journalctl -u simtrans -f`、`systemctl restart simtrans`；数据库每日 03:00 自动备份到 `data/backup/`（保留 30 天）。
+
 - `/` 首页：提交使用申请（申请人、邮箱、部门、主题、使用时间、预计时长），或输入访问码进入系统
 - `/app` 控制端、`/viewer` 查看端：需要访问码登录态（cookie），未登录自动跳回首页
 - `/admin` 管理后台：管理员密码登录（`security.admin_password`），审批申请、管理访问码、查看用量与成本
