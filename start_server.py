@@ -454,36 +454,47 @@ async def api_admin_rooms(request):
 # ---------- WebSocket ----------
 
 async def websocket_handler(request):
-    """WebSocket 处理器（握手前校验访问码登录态）"""
+    """WebSocket 处理器：控制端校验访问码登录态；查看端凭房间链接即可加入（扫码即进）"""
     ctx: AppContext = request.app['ctx']
 
     ws = web.WebSocketResponse()
     await ws.prepare(request)
 
-    # 鉴权：cookie 中解析访问码登录态
-    code_id = get_code_id_from_request(ctx.signer, request)
-    auth_error = None
-    code_row = None
-    if code_id is None:
-        auth_error = "未登录，请先在首页输入访问码"
-    else:
-        code_row = ctx.db.get_code(code_id)
-        if not code_row:
-            auth_error = "登录态无效，请重新输入访问码"
-        else:
-            valid, reason = ctx.db.check_code_validity(code_row)
-            if not valid:
-                auth_error = reason
-
-    # 从URL参数获取客户端角色与房间
+    # 先解析角色与房间（查看端凭有效房间可免登录态）
     query_params = request.query
     client_role = query_params.get("role", "controller")  # 默认为控制端
     if client_role not in ["controller", "viewer"]:
         client_role = "controller"
     room_id = (query_params.get("room") or "").strip().upper() or None
+
+    if client_role == "viewer" and room_id and ROOM_REGISTRY.get(room_id) is not None:
+        # 扫码/链接直达的查看端：房间号即凭证（6 位随机、不可猜测、空闲即回收），跳过 cookie 鉴权
+        code_id = None
+        auth_error = None
+        code_row = None
+    else:
+        # 鉴权：cookie 中解析访问码登录态
+        code_id = get_code_id_from_request(ctx.signer, request)
+        auth_error = None
+        code_row = None
+        if code_id is None:
+            auth_error = "未登录，请先在首页输入访问码"
+        else:
+            code_row = ctx.db.get_code(code_id)
+            if not code_row:
+                auth_error = "登录态无效，请重新输入访问码"
+            else:
+                valid, reason = ctx.db.check_code_validity(code_row)
+                if not valid:
+                    auth_error = reason
+
     # 查看端必须携带房间参数（从控制端分享的链接进入）
     if client_role == "viewer" and not room_id:
         auth_error = auth_error or "缺少房间参数，请使用控制端分享的查看端链接进入"
+
+    # 查看端带了房间号但房间不存在（可能已被回收）：给出明确提示而不是要求登录
+    if client_role == "viewer" and room_id and auth_error:
+        auth_error = "房间不存在或已结束，请向演讲者获取新的查看端链接"
 
     if auth_error:
         try:
@@ -667,7 +678,10 @@ async def start_server(port=15677, use_https=False):
 
     # 受保护页面：查看端
     async def viewer_handler(request):
-        if get_code_id_from_request(ctx.signer, request) is None:
+        # 扫码/链接直达场景：携带房间参数即可进入（房间号本身即凭证，不可猜测且短时效）；
+        # 无房间参数时要求访问码登录态，否则回到首页
+        room_param = (request.query.get('room') or '').strip()
+        if not room_param and get_code_id_from_request(ctx.signer, request) is None:
             raise web.HTTPFound('/')
         viewer_path = os.path.join(frontend_dir, 'viewer.html')
         if os.path.exists(viewer_path):
