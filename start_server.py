@@ -205,6 +205,19 @@ async def api_verify_code(request):
         return json_error(401, reason if code_row else "访问码无效或已过期")
 
     target = str(body.get("target", "app"))
+
+    # 查看端目标：解析该访问码当前进行中的房间，直接进入对应场次
+    if target == "viewer":
+        room_id = ROOM_REGISTRY.find_room_by_code(code_row["code"])
+        if not room_id:
+            return json_error(409, "访问码有效，但当前没有进行中的会议。")
+        cookie_spec = make_user_cookie(ctx.signer, code_row["id"], secure=ctx.use_https)
+        resp = web.json_response({"ok": True, "code_id": code_row["id"],
+                                  "applicant": code_row["applicant"],
+                                  "room_id": room_id,
+                                  "redirect": f"/viewer?room={room_id}"})
+        return ctx.set_cookie(resp, cookie_spec)
+
     cookie_spec = make_user_cookie(ctx.signer, code_row["id"], secure=ctx.use_https)
     resp = web.json_response({"ok": True, "code_id": code_row["id"],
                               "applicant": code_row["applicant"],

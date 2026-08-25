@@ -219,6 +219,18 @@ class RoomRegistry:
 
         self._idle_tasks[room_id] = asyncio.create_task(_teardown())
 
+    def find_room_by_code(self, code: str) -> Optional[str]:
+        """按访问码找房间：优先控制端在线的房间，其次最近创建的（等待重连窗口内）"""
+        best = None
+        for room in self._rooms.values():
+            if room.controller_info.get("code") != code:
+                continue
+            if room.controller_websocket is not None:
+                return room.room_id  # 在线房间直接命中
+            if best is None or room.created_at > best.created_at:
+                best = room
+        return best.room_id if best else None
+
     def snapshot(self) -> List[dict]:
         """房间运行态快照（供管理后台展示）"""
         result = []
