@@ -12,6 +12,7 @@
   /ws          WebSocket（握手时校验访问码 cookie）
 """
 import asyncio
+import copy
 import json
 import logging
 import os
@@ -505,7 +506,10 @@ async def websocket_handler(request):
         return ws
 
     # 创建翻译服务器实例（绑定访问码与房间，携带访问码信息供房间列表展示）
-    config = load_config()
+    # 配置在启动时已加载一次（见 start_server），这里只传深拷贝副本：
+    # 避免每个连接重复读磁盘/重初始化纠正器，同时保证 TranslationServer 内部的
+    # 配置修改（如 update_language）不会跨连接/跨房间泄露
+    config = copy.deepcopy(ctx.config)
     code_info = None
     if code_row is not None:
         code_info = {

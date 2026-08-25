@@ -89,14 +89,20 @@
 
 ---
 
-### 7. ⬜ 每个 WebSocket 连接都重新读配置文件
+### 7. ✅ 每个 WebSocket 连接都重新读配置文件（已修复）
 
-**位置**：`start_server.py` `websocket_handler`（`load_config()` 调用）
+**位置**：`start_server.py` `websocket_handler`
 
-每次连接都调用 `load_config()`，而 `load_config()` 还会执行 `_init_text_corrector()`（磁盘读写纠正词库）。
+**原问题**：每次连接都调用 `load_config()`，而 `load_config()` 还会执行 `_init_text_corrector()`（磁盘读写纠正词库）。
 查看端高频扫码进入时纯属浪费。
 
-**建议**：配置在 `start_server()` 启动时加载一次放入 `AppContext`，连接时直接复用。
+**修复内容**：
+- 配置仅在 `start_server()` 启动时加载一次（存入 `AppContext`），纠正器单例也随之在启动时初始化一次；
+- `websocket_handler` 改为传 `copy.deepcopy(ctx.config)` 给每个连接：深拷贝小 dict 成本近乎为零，
+  同时保证 `TranslationServer` 内部的配置修改（如 `update_language`）不会跨连接/跨房间泄露；
+- 已验证：AST 检查确认 handler 不再调用 `load_config`，副本隔离性测试通过。
+
+**行为变化说明**：修改 `config/config.json` 后需重启服务才生效（之前新连接会重读文件）。
 
 ---
 
@@ -234,7 +240,7 @@ INFO 级别下每个 TTS 块、每 100 个音频包、每条字幕都会打日�
 ## 建议的实施顺序
 
 1. **第一批（半天）**：~~#1 剥离查看端 TTS 负载~~、~~#2 分页 bug~~、~~#3 gitignore~~、~~#4 日志脱敏~~、~~#8 广播序列化~~（均已完成）；
-2. **第二批（1-2 天）**：#6 统一入口 + 清理依赖、#7 配置缓存、#14 优雅关闭；
+2. **第二批（1-2 天）**：#6 统一入口 + 清理依赖、~~#7 配置缓存~~、#14 优雅关闭；
 3. **第三批（按需）**：#16 前端拆分、#18 测试基建、#13 数据保留策略。
 
 > 注：`MULTI_WORKER_PLAN.md` 的多进程扩展要特别注意 #9（SQLite 单锁）和 #13，
