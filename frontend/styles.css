@@ -55,6 +55,60 @@ header {
     opacity: 0.8;
 }
 
+/* 头部标题组：主标题 + 会议信息（主题 · 使用人） */
+.header-title-group {
+    min-width: 0;
+}
+
+.header-room-meta {
+    font-size: 13px;
+    opacity: 0.85;
+    margin-top: 4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.header-room-meta:empty {
+    display: none;
+}
+
+/* 头部右侧操作区：查看端链接 + 全屏按钮成组，避免 space-between 把链接挤到中间 */
+.header-actions {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+}
+
+.viewer-link-btn {
+    color: white;
+    text-decoration: none;
+    font-size: 13px;
+    white-space: nowrap;
+    background: rgba(255, 255, 255, 0.2);
+    padding: 7px 12px;
+    border-radius: 6px;
+    opacity: 0.8;
+    transition: all 0.2s ease;
+}
+
+.viewer-link-btn:hover {
+    background: rgba(255, 255, 255, 0.3);
+    opacity: 1;
+}
+
+.viewer-link-btn:active {
+    transform: scale(0.95);
+}
+
+/* 房间未就绪时的禁用态（点击由 app.js 拦截并提示） */
+.viewer-link-btn.disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
 .page-fullscreen-btn:hover {
     background: rgba(255, 255, 255, 0.3);
     opacity: 1;

@@ -6,7 +6,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>同声传译 · 实时翻译</title>
-    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="styles.css?v=20260829">
     <!-- Opus 解码库 -->
     <script type="module">
         (async () => {
@@ -32,17 +32,21 @@
 <body>
     <div class="container">
         <header>
-            <h1>同声传译 · 实时翻译系统</h1>
-            <a href="/viewer" target="_blank" class="viewer-link-btn" title="打开查看端页面（观众/投影）"
-               style="color:inherit;text-decoration:none;font-size:13px;margin-right:14px;opacity:.75;">查看端 ↗</a>
-            <button class="page-fullscreen-btn" id="pageFullscreenBtn" title="网页全屏">
-                <svg class="page-fullscreen-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>
-                </svg>
-                <svg class="page-exit-fullscreen-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: none;">
-                    <path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3"/>
-                </svg>
-            </button>
+            <div class="header-title-group">
+                <h1>同声传译 · 实时翻译系统</h1>
+                <div class="header-room-meta" id="headerRoomMeta"></div>
+            </div>
+            <div class="header-actions">
+                <a href="/viewer" target="_blank" class="viewer-link-btn" title="打开本场查看端页面（观众/投影）">查看端 ↗</a>
+                <button class="page-fullscreen-btn" id="pageFullscreenBtn" title="网页全屏">
+                    <svg class="page-fullscreen-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>
+                    </svg>
+                    <svg class="page-exit-fullscreen-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: none;">
+                        <path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3"/>
+                    </svg>
+                </button>
+            </div>
         </header>
 
         <main class="main-layout">
@@ -76,6 +80,13 @@
                             <option value="ja">日语</option>
                             <option value="de">德语</option>
                         </select>
+                    </div>
+                    <div class="tts-playback-toggle">
+                        <label for="ttsPlayback" class="toggle-label">
+                            <span>语音播放</span>
+                            <input type="checkbox" id="ttsPlayback" checked>
+                            <span class="toggle-slider"></span>
+                        </label>
                     </div>
                     <!-- 高级设置折叠区域 -->
                     <div class="advanced-settings-collapsible">
@@ -138,13 +149,6 @@
                                 <label for="noiseSuppression" class="toggle-label">
                                     <span>噪音抑制</span>
                                     <input type="checkbox" id="noiseSuppression" checked>
-                                    <span class="toggle-slider"></span>
-                                </label>
-                            </div>
-                            <div class="tts-playback-toggle">
-                                <label for="ttsPlayback" class="toggle-label">
-                                    <span>语音播放</span>
-                                    <input type="checkbox" id="ttsPlayback" checked>
                                     <span class="toggle-slider"></span>
                                 </label>
                             </div>
@@ -223,7 +227,7 @@
         </main>
     </div>
 
-    <script src="app.js"></script>
+    <script src="app.js?v=20260829"></script>
 </body>
 </html>
 

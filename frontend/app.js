@@ -608,6 +608,42 @@ class TranslationApp {
                
                // 初始化 Opus 解码器
                this.initOpusDecoder();
+
+        // 查看端链接 gating：房间未就绪前点击给引导提示，不跳转到缺参数的页面
+        const viewerLink = document.querySelector('.viewer-link-btn');
+        if (viewerLink) {
+            viewerLink.addEventListener('click', (e) => {
+                if (!this.roomId) {
+                    e.preventDefault();
+                    this.showWarning('查看端链接在本场翻译开始后生成。\n\n请先点击「开始翻译」，链接就绪后此按钮将直接打开本场查看端页面。');
+                }
+            });
+            this.updateViewerLink();
+        }
+
+        // 加载当前访问码信息（使用人/主题），展示在信息面板
+        this.loadCodeInfo();
+    }
+
+    async loadCodeInfo() {
+        /** 从 /api/me 拉取当前访问码的申请信息，展示在页面上方 */
+        const metaEl = document.getElementById('headerRoomMeta');
+        try {
+            const resp = await fetch('/api/me');
+            const data = await resp.json();
+            if (resp.ok && data.ok) {
+                this.codeInfo = data;
+                const name = data.applicant + (data.department ? `（${data.department}）` : '');
+                if (metaEl) {
+                    metaEl.textContent = data.topic ? `${data.topic} · ${name}` : name;
+                }
+                document.title = data.topic
+                    ? `${data.topic} · 同声传译`
+                    : '同声传译 · 实时翻译系统';
+            }
+        } catch (e) {
+            console.warn('加载访问码信息失败:', e);
+        }
     }
     
     setupMediaDevicesPolyfill() {
@@ -1185,14 +1221,21 @@ class TranslationApp {
         try {
             sessionStorage.removeItem('st_room');
         } catch (e) {}
+        this.updateViewerLink();
     }
 
     updateViewerLink() {
-        /** 更新顶部查看端链接为本场专属链接 */
-        const link = document.querySelector('a[href="/viewer"]');
-        if (link && this.roomId) {
+        /** 更新顶部查看端链接：有房间时指向本场并可点击，无房间时禁用并回到通用入口 */
+        const link = document.querySelector('.viewer-link-btn');
+        if (!link) return;
+        if (this.roomId) {
             link.href = `/viewer?room=${encodeURIComponent(this.roomId)}`;
             link.title = `本场查看端链接（房间 ${this.roomId}）`;
+            link.classList.remove('disabled');
+        } else {
+            link.href = '/viewer';
+            link.title = '开始翻译后生成查看端链接';
+            link.classList.add('disabled');
         }
     }
 

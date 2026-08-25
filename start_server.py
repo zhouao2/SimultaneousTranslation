@@ -393,10 +393,15 @@ async def api_admin_usage(request):
 
 
 async def api_admin_audit(request):
+    """审计日志（分页）"""
     ctx: AppContext = request.app['ctx']
-    rows = ctx.db._conn.execute(
-        "SELECT * FROM audit_log ORDER BY id DESC LIMIT 200").fetchall()
-    return web.json_response({"ok": True, "logs": [dict(r) for r in rows]})
+    limit = _qint(request.query.get("limit"), 20, lo=1, hi=200)
+    offset = _qint(request.query.get("offset"), 0, lo=0)
+    rows = ctx.db.list_audit(limit=limit, offset=offset)
+    return web.json_response({
+        "ok": True, "total": ctx.db.count_audit(), "limit": limit, "offset": offset,
+        "logs": [dict(r) for r in rows],
+    })
 
 
 async def api_health(request):
@@ -407,6 +412,24 @@ async def api_health(request):
         "rooms": len(rooms),
         "active_rooms": sum(1 for r in rooms if r["has_controller"]),
         "viewers": sum(r["viewer_count"] for r in rooms),
+    })
+
+
+async def api_me(request):
+    """当前登录态对应的访问码信息（控制端展示使用人/主题用）"""
+    ctx: AppContext = request.app['ctx']
+    code_id = get_code_id_from_request(ctx.signer, request)
+    if code_id is None:
+        return json_error(401, "未登录")
+    code_row = ctx.db.get_code(code_id)
+    if not code_row:
+        return json_error(401, "登录态无效")
+    return web.json_response({
+        "ok": True,
+        "applicant": code_row["applicant"],
+        "department": code_row["department"] or "",
+        "topic": code_row["topic"] or "",
+        "code": code_row["code"],
     })
 
 
@@ -660,6 +683,7 @@ async def start_server(port=15677, use_https=False):
     app.router.add_get('/api/admin/audit', require_admin(api_admin_audit))
     app.router.add_get('/api/admin/rooms', require_admin(api_admin_rooms))
     app.router.add_get('/api/health', api_health)
+    app.router.add_get('/api/me', api_me)
 
     # 静态文件（CSS、JS等）- 使用通配符匹配所有文件
     async def static_handler(request):

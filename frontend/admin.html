@@ -578,6 +578,9 @@
                     <div class="tab" data-uview="day" onclick="switchUsageView('day')">
                         <span class="dot"></span>按天汇总 <span class="count-info" id="usageByDayInfo" style="margin-left:6px;color:inherit;opacity:.85;"></span>
                     </div>
+                    <div class="tab" data-uview="token" onclick="switchUsageView('token')">
+                        <span class="dot"></span>Token 消耗 <span class="count-info" id="usageByTokenInfo" style="margin-left:6px;color:inherit;opacity:.85;"></span>
+                    </div>
                 </div>
                 <span class="spacer"></span>
             </div>
@@ -589,11 +592,20 @@
                 <div id="usageByDay"></div>
                 <div class="loadmore" id="usageByDayMore"></div>
             </div>
+            <div id="usageViewToken" class="hidden">
+                <div id="usageByToken"></div>
+                <div class="loadmore" id="usageByTokenMore"></div>
+            </div>
         </div>
 
         <!-- 审计 -->
         <div class="panel hidden" id="panel-audit">
+            <div class="section-title">审计日志 <span class="count-info" id="auditInfo"></span></div>
+            <div class="toolbar">
+                <button class="btn sm ghost" onclick="resetAudit()">⟳ 刷新</button>
+            </div>
             <div id="auditTable"></div>
+            <div class="loadmore" id="auditMore"></div>
         </div>
 
         <!-- 活跃房间 -->
@@ -616,22 +628,34 @@ const PAGE = {
     codes:       { offset: 0, limit: 10, total: 0, rows: [], loading: false, q: '', status: '' },
     usageByCode: { offset: 0, limit: 10, total: 0, rows: [], loading: false, days: 30, rendered: false },
     usageByDay:  { offset: 0, limit: 10, total: 0, rows: [], loading: false, days: 30, rendered: false },
+    usageByToken:{ offset: 0, limit: 10, total: 0, rows: [], loading: false, days: 30, rendered: false },
+    audit:       { offset: 0, limit: 10, total: 0, rows: [], loading: false },
 };
-// 当前选中的 subtab: 'code' 或 'day'
+// 当前选中的 subtab: 'code' / 'day' / 'token'
 let USAGE_VIEW = 'code';
 function switchUsageView(v) {
     USAGE_VIEW = v;
     document.querySelectorAll('[data-uview]').forEach(el => el.classList.toggle('active', el.dataset.uview === v));
     document.getElementById('usageViewCode').classList.toggle('hidden', v !== 'code');
     document.getElementById('usageViewDay').classList.toggle('hidden',  v !== 'day');
+    document.getElementById('usageViewToken').classList.toggle('hidden', v !== 'token');
+    if (v === 'token') {
+        // Token 视图独立分页（每页 10 条），与按访问码互不干扰
+        if (!PAGE.usageByToken.rendered) {
+            loadUsageToken();
+        } else {
+            renderTokenView();
+        }
+        return;
+    }
     const targetState = (v === 'code') ? PAGE.usageByCode : PAGE.usageByDay;
     if (!targetState.rendered) {
         // 首次切到该 subtab: 只重置这一边, 拉首页 + 渲染, 不动另一边已加载的页
         loadUsage(true, v);
     } else {
-        // 目标 subtab 已渲染过, 但 B.rows 可能在用户停留在另一 subtab
-        // 点"加载更多"时后台累积了, 这里重渲染一次以让 DOM 跟上累积行数
-        loadUsage(false, v);
+        // 已渲染过：仅本地重渲染，绝不追加（否则切一次标签就多加载一页）
+        if (v === 'code') renderUsageCodeView();
+        else renderUsageDayView();
     }
 }
 function debounce(fn, ms) {
@@ -670,11 +694,16 @@ function resetAndLoad(tab) {
     } else if (tab === 'usage') {
         PAGE.usageByCode.offset = 0; PAGE.usageByCode.rows = [];
         PAGE.usageByDay.offset = 0; PAGE.usageByDay.rows = [];
+        PAGE.usageByToken.offset = 0; PAGE.usageByToken.rows = []; PAGE.usageByToken.rendered = false;
         const d = parseInt(document.getElementById('usageDays').value, 10);
-        PAGE.usageByCode.days = d; PAGE.usageByDay.days = d;
+        PAGE.usageByCode.days = d; PAGE.usageByDay.days = d; PAGE.usageByToken.days = d;
         document.getElementById('usageByCode').innerHTML = '<div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div>';
         document.getElementById('usageByDay').innerHTML = '<div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div>';
-        loadUsage(true);
+        if (USAGE_VIEW === 'token') {
+            loadUsageToken();
+        } else {
+            loadUsage(true);
+        }
     } else if (tab === 'pending') {
         PAGE.pending.offset = 0; PAGE.pending.rows = [];
         PAGE.pending.q = (document.getElementById('pendingQ') || {}).value || '';
@@ -751,9 +780,10 @@ async function loadRooms() {
     const data = await api('/api/admin/rooms');
     const rooms = data.rooms || [];
     const html = rooms.length ? `<table>
-        <tr><th>房间</th><th>申请人</th><th>主题</th><th>运行时长</th><th>控制端</th><th>查看端数</th><th>创建时间</th><th>查看端链接</th></tr>
+        <tr><th>房间</th><th>访问码</th><th>申请人</th><th>主题</th><th>运行时长</th><th>控制端</th><th>查看端数</th><th>创建时间</th><th>查看端链接</th></tr>
         ${rooms.map(r => `<tr>
             <td class="code-val">${esc(r.room_id)}</td>
+            <td class="code-val">${esc(r.code) || '-'}</td>
             <td>${esc(r.applicant) || '-'}${r.department ? `<br><span style="color:#9aa0b5;font-size:12px;">${esc(r.department)}</span>` : ''}</td>
             <td>${esc(r.topic) || '-'}</td>
             <td>${Math.floor(r.uptime_sec / 60)} 分钟</td>
@@ -889,57 +919,74 @@ function heatClass(ratio) {
     return 'cool';
 }
 
+// 用量页渲染与拉取分离：切换 subtab 只重渲染（不追加），点"加载更多"才拉下一页
+let USAGE_CURRENCY = 'CNY';
+let USAGE_PRICING_CONFIGURED = false;
+
 // loadUsage(reset, view):
 //   reset=true, view=null -> 重置两边 + 拉首页 + 两边都渲染 (首次进入 / 范围变化)
 //   reset=true, view='code'|'day' -> 只重置 view 一边 + 拉首页 + 渲染 view (切换 subtab 首次补渲染)
-//   reset=false, view='code'|'day' -> 加载下一页, 只把 view 一边追加渲染 (另一边也 concat 以更新 KPI)
+//   reset=false, view='code'|'day' -> 只为 view 这一边拉取并追加下一页 (另一边不动)
 async function loadUsage(reset = true, view = null) {
     const days = parseInt(document.getElementById('usageDays').value, 10);
     const A = PAGE.usageByCode;
     const B = PAGE.usageByDay;
-    // 防止重复请求: 如果两边都已经在 loading, 直接返回
-    if (A.loading && B.loading) return;
     const target = view || USAGE_VIEW;       // 不传 view 时按当前 subtab 决定
     const renderAll = reset && !view;         // 首次进入 / 范围变化 -> 两边都渲染
     if (reset) {
-        A.offset = 0; A.rows = []; A.days = days; A.rendered = false;
-        B.offset = 0; B.rows = []; B.days = days; B.rendered = false;
+        if (renderAll || target === 'code') { A.offset = 0; A.rows = []; A.days = days; A.rendered = false; }
+        if (renderAll || target === 'day')  { B.offset = 0; B.rows = []; B.days = days; B.rendered = false; }
     }
-    A.loading = true; B.loading = true;
-    renderLoadMore(A, 'usageByCodeMore', () => loadUsage(false, 'code'));
-    renderLoadMore(B, 'usageByDayMore',  () => loadUsage(false, 'day'));
-    // 一次 API 拉两边, 按 target 决定追加/渲染哪一边 (renderAll=true 时两边都渲染)
+    const state = (target === 'day') ? B : A;
+    state.loading = true;
+    renderUsageCodeView();
+    renderUsageDayView();
+    // 只拉 target 这一边；另一边的数据保持原样，切换回去时本地重渲染即可
     const qs = new URLSearchParams({
         days,
-        code_limit: A.limit, code_offset: A.offset,
-        day_limit:  B.limit, day_offset:  B.offset,
+        code_limit: (target === 'day') ? 1 : A.limit,
+        code_offset: (target === 'day') ? 0 : A.offset,
+        day_limit:  (target === 'day') ? B.limit : 1,
+        day_offset: (target === 'day') ? B.offset : 0,
     });
     const data = await api('/api/admin/usage?' + qs.toString());
     const p = data.pricing || {};
-    const configured = (p.input_audio_per_ktoken || p.output_audio_per_ktoken || p.output_text_per_ktoken);
-    const currency = data.currency || 'CNY';
-    document.getElementById('pricingInfo').textContent = configured
-        ? `单价（每千 token，${currency}）：输入音频 ${p.input_audio_per_ktoken} / 输出音频 ${p.output_audio_per_ktoken} / 输出文本 ${p.output_text_per_ktoken}`
+    USAGE_CURRENCY = data.currency || 'CNY';
+    USAGE_PRICING_CONFIGURED = !!(p.input_audio_per_ktoken || p.output_audio_per_ktoken || p.output_text_per_ktoken);
+    document.getElementById('pricingInfo').textContent = USAGE_PRICING_CONFIGURED
+        ? `单价（每千 token，${USAGE_CURRENCY}）：输入音频 ${p.input_audio_per_ktoken} / 输出音频 ${p.output_audio_per_ktoken} / 输出文本 ${p.output_text_per_ktoken}`
         : '未配置 token 单价（config.json pricing 节），成本列显示为 0';
 
-    // ===== 按访问码 =====
-    A.total = (data.by_code && data.by_code.total) || 0;
-    A.rows = A.rows.concat((data.by_code && data.by_code.rows) || []);
-    A.offset = A.rows.length;
-    A.loading = false;
+    if (target === 'day') {
+        B.total = (data.by_day && data.by_day.total) || 0;
+        B.rows = B.rows.concat((data.by_day && data.by_day.rows) || []);
+        B.offset = B.rows.length;
+        B.loading = false;
+        B.rendered = true;
+    } else {
+        A.total = (data.by_code && data.by_code.total) || 0;
+        A.rows = A.rows.concat((data.by_code && data.by_code.rows) || []);
+        A.offset = A.rows.length;
+        A.loading = false;
+        A.rendered = true;
+    }
+
+    if (renderAll || target === 'code') renderUsageCodeView();
+    if (renderAll || target === 'day')  renderUsageDayView();
+    renderUsageKpi();
+}
+
+function renderUsageCodeView() {
+    const A = PAGE.usageByCode;
+    const currency = USAGE_CURRENCY;
     const byCode = A.rows.filter(r => r.session_count > 0 || r.used_sec > 0);
     byCode.sort((a, b) => b.cost - a.cost);
-    // 聚合 (KPI 也要用, 必须放 if 外)
     const maxCost = Math.max(1, ...byCode.map(r => r.cost));
     const maxDur = Math.max(1, ...byCode.map(r => r.duration_msec));
     const sumCost = byCode.reduce((s, r) => s + r.cost, 0);
     const sumDur = byCode.reduce((s, r) => s + r.duration_msec, 0);
     const sumSessions = byCode.reduce((s, r) => s + r.session_count, 0);
-    const sumInT = byCode.reduce((s, r) => s + (r.input_audio_tokens || 0), 0);
-    const sumOutT = byCode.reduce((s, r) => s + (r.output_audio_tokens || 0), 0);
-    const sumTxtT = byCode.reduce((s, r) => s + (r.output_text_tokens || 0), 0);
 
-    if (renderAll || target === 'code') {
     const infoA = document.getElementById('usageByCodeInfo');
     if (infoA) infoA.innerHTML = A.total ? `共 <b>${A.rows.length}</b> / ${A.total} 个访问码` : '';
     document.getElementById('usageByCode').innerHTML = byCode.length ? `<table>
@@ -947,7 +994,6 @@ async function loadUsage(reset = true, view = null) {
         ${byCode.map(r => {
             const cRatio = r.cost / maxCost;
             const dRatio = r.duration_msec / maxDur;
-            const totalT = (r.input_audio_tokens || 0) + (r.output_audio_tokens || 0) + (r.output_text_tokens || 0);
             return `<tr>
             <td class="code-val">${esc(r.code)}</td>
             <td><div class="applicant"><div class="name">${esc(r.applicant)}</div><div class="email">${esc(r.email || '')}</div></div></td>
@@ -969,16 +1015,12 @@ async function loadUsage(reset = true, view = null) {
         </table>`
         : '<div class="empty"><div class="icon">📊</div>所选时间范围内暂无用量</div>';
     renderLoadMore(A, 'usageByCodeMore', () => loadUsage(false, 'code'));
-        A.rendered = true;
-    }  // 关闭 if (renderAll || target === 'code')
+}
 
-    // ===== 按天汇总 =====
-    B.total = (data.by_day && data.by_day.total) || 0;
-    B.rows = B.rows.concat((data.by_day && data.by_day.rows) || []);
-    B.offset = B.rows.length;
-    B.loading = false;
+function renderUsageDayView() {
+    const B = PAGE.usageByDay;
+    const currency = USAGE_CURRENCY;
     const byDay = B.rows.slice();
-    if (renderAll || target === 'day') {
     const infoB = document.getElementById('usageByDayInfo');
     if (infoB) infoB.innerHTML = B.total ? `共 <b>${B.rows.length}</b> / ${B.total} 天` : '';
 
@@ -1011,44 +1053,132 @@ async function loadUsage(reset = true, view = null) {
         </table>`
         : '<div class="empty"><div class="icon">📊</div>暂无数据</div>';
     renderLoadMore(B, 'usageByDayMore', () => loadUsage(false, 'day'));
-        B.rendered = true;
-    }  // 关闭 if (renderAll || target === 'day')
+}
 
-    // ===== KPI 卡片 =====
-    // by_code 已聚合: 总成本/总时长/总会话/活跃码数 (按 cost > 0 过滤)
-    const activeCodes = byCode.length;
-    const totalCost = sumCost;
-    const totalDur = sumDur;
-    const totalSess = sumSessions;
+function renderUsageKpi() {
+    const A = PAGE.usageByCode;
+    const byCode = A.rows.filter(r => r.session_count > 0 || r.used_sec > 0);
+    const sumCost = byCode.reduce((s, r) => s + r.cost, 0);
+    const sumDur = byCode.reduce((s, r) => s + r.duration_msec, 0);
+    const sumSessions = byCode.reduce((s, r) => s + r.session_count, 0);
+    const sumInT = byCode.reduce((s, r) => s + (r.input_audio_tokens || 0), 0);
+    const sumOutT = byCode.reduce((s, r) => s + (r.output_audio_tokens || 0), 0);
+    const sumTxtT = byCode.reduce((s, r) => s + (r.output_text_tokens || 0), 0);
     const fmtCurrency = (v) => v.toFixed(2);
     const setEl = (id, html) => { const e = document.getElementById(id); if (e) e.innerHTML = html; };
-    setEl('kpiCost', currency + ' ' + fmtCurrency(totalCost));
-    setEl('kpiCostSub', configured
+    setEl('kpiCost', USAGE_CURRENCY + ' ' + fmtCurrency(sumCost));
+    setEl('kpiCostSub', USAGE_PRICING_CONFIGURED
         ? `${sumInT ? '输入音频 ' + fmtInt(sumInT) : ''}${sumOutT ? ' · 输出音频 ' + fmtInt(sumOutT) : ''}${sumTxtT ? ' · 文本 ' + fmtInt(sumTxtT) : ''}`
         : '未配置 token 单价');
-    setEl('kpiDuration', fmtDur(totalDur));
-    setEl('kpiDurationSub', '合计 ' + totalSess + ' 个会话');
-    setEl('kpiSessions', fmtInt(totalSess));
-    setEl('kpiSessionsSub', activeCodes + ' 个活跃访问码');
-    setEl('kpiCodes', fmtInt(activeCodes));
+    setEl('kpiDuration', fmtDur(sumDur));
+    setEl('kpiDurationSub', '合计 ' + sumSessions + ' 个会话');
+    setEl('kpiSessions', fmtInt(sumSessions));
+    setEl('kpiSessionsSub', byCode.length + ' 个活跃访问码');
+    setEl('kpiCodes', fmtInt(byCode.length));
     setEl('kpiCodesSub', A.total ? '总 ' + A.total + ' 个访问码' : '—');
 }
 
+
+// ---------- Token 消耗视图（独立分页，每页 10 条） ----------
+async function loadUsageToken(append = false) {
+    const T = PAGE.usageByToken;
+    const days = parseInt(document.getElementById('usageDays').value, 10);
+    if (!append) { T.offset = 0; T.rows = []; T.days = days; }
+
+    T.loading = true;
+    renderTokenView();
+    const qs = new URLSearchParams({
+        days,
+        code_limit: T.limit, code_offset: T.offset,
+        day_limit: 1, day_offset: 0,
+    });
+    const data = await api('/api/admin/usage?' + qs.toString());
+    T.total = (data.by_code && data.by_code.total) || 0;
+    T.rows = append ? T.rows.concat((data.by_code && data.by_code.rows) || [])
+                    : ((data.by_code && data.by_code.rows) || []);
+    T.offset = T.rows.length;
+    T.loading = false;
+    T.rendered = true;
+    renderTokenView();
+}
+
+function renderTokenView() {
+    const T = PAGE.usageByToken;
+    const rows = T.rows.filter(r => r.session_count > 0 || r.used_sec > 0).slice();
+    const totalOf = r => (r.input_audio_tokens || 0) + (r.output_audio_tokens || 0) + (r.output_text_tokens || 0);
+    rows.sort((a, b) => totalOf(b) - totalOf(a));
+    const sumIn  = rows.reduce((s, r) => s + (r.input_audio_tokens  || 0), 0);
+    const sumOut = rows.reduce((s, r) => s + (r.output_audio_tokens || 0), 0);
+    const sumTxt = rows.reduce((s, r) => s + (r.output_text_tokens  || 0), 0);
+    const maxTotal = Math.max(1, ...rows.map(totalOf));
+
+    const info = document.getElementById('usageByTokenInfo');
+    if (info) info.innerHTML = T.total ? `共 <b>${T.rows.length}</b> / ${T.total} 个访问码` : '';
+
+    document.getElementById('usageByToken').innerHTML = rows.length ? `<table>
+        <tr><th>访问码</th><th>申请人</th><th class="num">输入音频 token</th><th class="num">输出音频 token</th><th class="num">输出文本 token</th><th class="num">合计</th><th>占比</th></tr>
+        ${rows.map(r => {
+            const inT = r.input_audio_tokens || 0, outT = r.output_audio_tokens || 0, txtT = r.output_text_tokens || 0;
+            const t = inT + outT + txtT;
+            return `<tr>
+            <td class="code-val">${esc(r.code)}</td>
+            <td><div class="applicant"><div class="name">${esc(r.applicant)}</div><div class="email">${esc(r.email || '')}</div></div></td>
+            <td class="num">${fmtInt(inT)}</td>
+            <td class="num">${fmtInt(outT)}</td>
+            <td class="num">${fmtInt(txtT)}</td>
+            <td class="num"><b>${fmtInt(t)}</b></td>
+            <td><div class="h-bar-wrap"><div class="h-bar ${heatClass(t / maxTotal)}"><span style="width:${(t / maxTotal * 100).toFixed(0)}%"></span></div></div></td>
+            </tr>`;
+        }).join('')}
+        <tr class="totals-row">
+            <td colspan="2">总计</td>
+            <td class="num">${fmtInt(sumIn)}</td>
+            <td class="num">${fmtInt(sumOut)}</td>
+            <td class="num">${fmtInt(sumTxt)}</td>
+            <td class="num"><b>${fmtInt(sumIn + sumOut + sumTxt)}</b></td>
+            <td></td>
+        </tr></table>`
+        : (T.loading ? '' : '<div class="empty"><div class="icon">🪙</div>所选时间范围内暂无 token 消耗</div>');
+    renderLoadMore(T, 'usageByTokenMore', () => loadUsageToken(true));
+}
+
 // ---------- 审计 ----------
-async function loadAudit() {
-    const data = await api('/api/admin/audit');
+async function loadAudit(append = false) {
+    const A = PAGE.audit;
+    if (!append) { A.offset = 0; A.rows = []; }
+
+    A.loading = true;
+    renderLoadMore(A, 'auditMore', () => loadAudit(true));
+    const qs = new URLSearchParams({ limit: A.limit, offset: A.offset });
+    const data = await api('/api/admin/audit?' + qs.toString());
+    A.total = data.total || 0;
+    A.rows = append ? A.rows.concat(data.logs || []) : (data.logs || []);
+    A.offset = A.rows.length;
+    A.loading = false;
+
+    const info = document.getElementById('auditInfo');
+    if (info) info.innerHTML = `共 <b>${fmtInt(A.total)}</b> 条`;
+
     const nameMap = {
         request_submitted: '提交申请', request_approved: '审批通过', request_rejected: '审批拒绝',
         code_revoked: '撤销访问码', code_quota_added: '追加额度', quota_exceeded: '额度用尽',
-        session_start: '会话开始', session_end: '会话结束',
+        session_start: '会话开始', session_end: '会话结束', session_rebuild: '会话重建',
         admin_login: '管理员登录', admin_login_failed: '管理员登录失败',
     };
-    document.getElementById('auditTable').innerHTML = data.logs.length ? `<table>
+    document.getElementById('auditTable').innerHTML = A.rows.length ? `<table>
         <tr><th>时间</th><th>操作者</th><th>事件</th><th>详情</th></tr>
-        ${data.logs.map(l => `<tr>
+        ${A.rows.map(l => `<tr>
             <td>${fmtDT(l.ts)}</td><td>${esc(l.actor)}</td>
             <td>${nameMap[l.action] || l.action}</td><td>${esc(l.detail)}</td></tr>`).join('')}</table>`
         : '<div class="empty"><div class="icon">📜</div>暂无日志</div>';
+    renderLoadMore(A, 'auditMore', () => loadAudit(true));
+}
+
+function resetAudit() {
+    PAGE.audit.offset = 0; PAGE.audit.rows = [];
+    document.getElementById('auditTable').innerHTML =
+        '<div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div>';
+    loadAudit();
 }
 
 // ---------- 初始化：探测登录态 ----------

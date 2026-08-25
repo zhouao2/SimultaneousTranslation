@@ -368,6 +368,16 @@ class AccessDB:
             params.extend([limit, offset])
         return self._conn.execute(sql, params).fetchall()
 
+    # ---------- 审计日志 ----------
+
+    def list_audit(self, limit: int = 20, offset: int = 0) -> list:
+        return self._conn.execute(
+            "SELECT * FROM audit_log ORDER BY id DESC LIMIT ? OFFSET ?",
+            (limit, offset)).fetchall()
+
+    def count_audit(self) -> int:
+        return self._conn.execute("SELECT COUNT(*) AS c FROM audit_log").fetchone()["c"]
+
     def close(self):
         with self._lock:
             self._conn.close()
