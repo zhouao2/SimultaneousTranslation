@@ -123,7 +123,7 @@ class VolcengineASTClient:
                 logger.error("2. 服务未开通或权限不足")
                 logger.error("3. Resource ID 不正确")
                 logger.error(f"   当前 Resource ID: {self.resource_id}")
-                logger.error(f"   当前 API Key: {self.api_key[:8]}...")
+                logger.error(f"   当前 API Key 长度: {len(self.api_key)}（内容已隐藏，请自行到控制台核对）")
             else:
                 logger.error(f"连接失败: {e}")
                 logger.error(f"错误类型: {type(e).__name__}")

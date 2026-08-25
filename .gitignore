@@ -42,8 +42,9 @@ config/config.*.json
 .DS_Store
 Thumbs.db
 
+# SSL 证书（自签名，勿提交私钥）
 ssl/cert.pem
-ssl/key.pem //SSL证书   
+ssl/key.pem
 key.pem
 # 个人配置文件（避免提交敏感信息）
 config/corrections.json

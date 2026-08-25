@@ -51,6 +51,8 @@ class TranslationSession:
         self.volcengine_client: Optional[VolcengineASTClient] = None
         self.controller_websocket = None  # 控制端连接
         self.viewer_websockets: Dict[str, any] = {}  # 查看端连接字典 {client_id: websocket}
+        # 订阅 TTS 音频的查看端集合（默认不推音频，避免 base64 负载广播给所有查看端）
+        self.viewer_wants_tts: set = set()
         # 控制端信息（来自其访问码），供管理端房间列表展示；控制端断开后保留至房间回收
         self.controller_info = {"applicant": "", "department": "", "topic": "", "code": ""}
         self.current_source_text = ""  # 当前原文
@@ -94,15 +96,30 @@ class TranslationSession:
     
     async def remove_viewer(self, client_id: str):
         """移除查看端连接"""
+        self.viewer_wants_tts.discard(client_id)
         if client_id in self.viewer_websockets:
             del self.viewer_websockets[client_id]
             logger.info(f"查看端已断开，客户端ID: {client_id}，当前查看端数量: {len(self.viewer_websockets)}")
     
-    async def broadcast_to_viewers(self, message: dict):
-        """向所有查看端广播消息"""
+    async def broadcast_to_viewers(self, message: dict, tts_client_ids: Optional[set] = None):
+        """向所有查看端广播消息。
+
+        Args:
+            message: 要广播的消息（可能含 TTS 音频负载）
+            tts_client_ids: 需要接收 TTS 音频的查看端集合。为 None 时所有查看端收到完整消息；
+                            为集合时其余查看端收到剥离音频负载的精简消息（节省带宽）
+        """
         if not self.viewer_websockets:
             return
-        
+
+        # 预先序列化：字幕事件频率高，避免每个查看端重复 dumps
+        full_payload = json.dumps(message)
+        lite_payload = None
+        if tts_client_ids is not None and any(
+                cid not in tts_client_ids for cid in self.viewer_websockets):
+            lite_data = {k: v for k, v in message.get("data", {}).items() if k != "data"}
+            lite_payload = json.dumps({**message, "data": lite_data})
+
         disconnected_clients = []
         for client_id, ws in self.viewer_websockets.items():
             try:
@@ -113,13 +130,18 @@ class TranslationSession:
                 if hasattr(ws, 'open') and not ws.open:
                     disconnected_clients.append(client_id)
                     continue
-                
+
+                # 选择负载：未订阅 TTS 的查看端不收音频数据
+                payload = full_payload
+                if lite_payload is not None and client_id not in tts_client_ids:
+                    payload = lite_payload
+
                 # 发送消息
                 if hasattr(ws, 'send_str'):
                     # send_str 是异步方法（WebSocketAdapter 中定义的）
-                    await ws.send_str(json.dumps(message))
+                    await ws.send_str(payload)
                 elif hasattr(ws, 'send'):
-                    await ws.send(json.dumps(message))
+                    await ws.send(payload)
                 else:
                     logger.warning(f"查看端 {client_id} 的 WebSocket 对象不支持发送消息")
             except Exception as e:
@@ -576,6 +598,17 @@ class TranslationServer:
                 if self.client_role == "viewer" and msg_type == "ping":
                     await self._send_to_client({"type": "pong"})
                     return
+
+                # 查看端 TTS 音频订阅开关：仅订阅的查看端在广播时收到音频负载（默认不推，节省带宽）
+                if self.client_role == "viewer" and msg_type == "set_tts":
+                    if self.session and self.viewer_client_id:
+                        if data.get("enabled"):
+                            self.session.viewer_wants_tts.add(self.viewer_client_id)
+                            logger.info(f"[room {self.session.room_id}] 查看端 {self.viewer_client_id} 订阅 TTS 音频")
+                        else:
+                            self.session.viewer_wants_tts.discard(self.viewer_client_id)
+                            logger.info(f"[room {self.session.room_id}] 查看端 {self.viewer_client_id} 取消订阅 TTS 音频")
+                    return
                 
                 # 控制端的消息处理
                 if self.client_role != "controller":
@@ -828,9 +861,11 @@ class TranslationServer:
             
             await self._send_to_client(message_to_send)
             
-            # 广播给所有查看端
+            # 广播给所有查看端（仅订阅了 TTS 的查看端收到音频负载，默认不广播音频节省带宽）
             if self.session:
-                await self.session.broadcast_to_viewers(message_to_send)
+                tts_targets = self.session.viewer_wants_tts if data.get("data") else None
+                await self.session.broadcast_to_viewers(message_to_send,
+                                                        tts_client_ids=tts_targets)
             
             logger.debug(f"已发送消息到客户端并广播给查看端: event={event}")
         except Exception as e:

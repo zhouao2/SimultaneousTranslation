@@ -91,6 +91,9 @@ class ViewerApp {
                 this.ttsEnabled = e.target.checked;
                 console.log('TTS 播放开关:', this.ttsEnabled ? '开启' : '关闭');
                 
+                // 同步订阅状态到服务端：只有订阅的查看端才会收到 TTS 音频负载（默认不推，节省带宽）
+                this.sendTtsSubscription();
+                
                 // 当开关打开时立即激活音频上下文和解锁音频（移动端 / Safari 必需，
                 // Safari 因不支持 OGG/Opus 的 HTML5 播放，必须走软解码 + Web Audio）
                 if (this.ttsEnabled && (this.isMobile || this.isSafari)) {
@@ -113,6 +116,21 @@ class ViewerApp {
         
         // 初始化
         this.init();
+    }
+
+    sendTtsSubscription() {
+        /**
+         * 向服务端同步 TTS 音频订阅状态。
+         * 服务端默认不向查看端广播 TTS 音频负载（节省带宽），
+         * 只有显式订阅的查看端才会收到。
+         */
+        if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+            try {
+                this.ws.send(JSON.stringify({ type: 'set_tts', enabled: !!this.ttsEnabled }));
+            } catch (e) {
+                console.warn('发送 TTS 订阅状态失败:', e);
+            }
+        }
     }
 
     initFontSizeControl() {
@@ -485,6 +503,11 @@ class ViewerApp {
                     clearTimeout(timeout);
                     console.log('✓ WebSocket 连接已建立');
                     this.updateConnectionStatus('Connected', true);
+                    
+                    // 重连后服务端是新连接，若当前开着 TTS 开关需重新订阅音频推送
+                    if (this.ttsEnabled) {
+                        this.sendTtsSubscription();
+                    }
                     
                     // iOS Safari 特殊处理：连接建立后等待一小段时间，确保连接稳定
                     if (this.isIOS) {

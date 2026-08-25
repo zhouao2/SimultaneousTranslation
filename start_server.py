@@ -396,7 +396,7 @@ async def api_admin_usage(request):
                 days, limit=by_code_limit, offset=by_code_offset)]
         },
         "by_day": {
-            "total": by_code_total,
+            "total": ctx.db.count_daily_usage(days),
             "limit": by_day_limit,
             "offset": by_day_offset,
             "rows": [with_cost(r) for r in ctx.db.daily_usage(

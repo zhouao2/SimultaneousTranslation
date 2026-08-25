@@ -326,7 +326,7 @@ class AccessDB:
     def usage_summary(self, days: int = 30,
                         limit: Optional[int] = None,
                         offset: int = 0) -> list:
-        """按访问码聚合用量（近 N 天有活动的码）"""
+        """按访问码聚合用量（仅聚合近 N 天内有会话活动的码）"""
         sql = """SELECT c.id, c.code, c.applicant, c.department, c.topic, c.status,
                       c.quota_min, c.used_sec,
                       COALESCE(SUM(s.duration_msec), 0) AS duration_msec,
@@ -334,8 +334,8 @@ class AccessDB:
                       COALESCE(SUM(s.output_audio_tokens), 0) AS output_audio_tokens,
                       COALESCE(SUM(s.output_text_tokens), 0) AS output_text_tokens,
                       COUNT(s.id) AS session_count
-               FROM codes c LEFT JOIN sessions s ON s.code_id = c.id
-                    AND s.started_at >= datetime('now', 'localtime', ?)
+               FROM codes c JOIN sessions s ON s.code_id = c.id
+               WHERE s.started_at >= datetime('now', 'localtime', ?)
                GROUP BY c.id ORDER BY c.id DESC"""
         params = [f'-{days} days']
         if limit is not None and limit > 0:
@@ -344,10 +344,18 @@ class AccessDB:
         return self._conn.execute(sql, params).fetchall()
 
     def count_usage_codes(self, days: int = 30) -> int:
-        """按访问码聚合时,总共有多少码在该时间窗内有/无活动（用于分页）"""
+        """近 N 天内有会话活动的访问码数（用于分页，与 usage_summary 行数对应）"""
         return self._conn.execute(
-            "SELECT COUNT(*) AS c FROM codes"
-        ).fetchone()["c"]
+            """SELECT COUNT(DISTINCT code_id) AS c FROM sessions
+               WHERE started_at >= datetime('now', 'localtime', ?)""",
+            (f'-{days} days',)).fetchone()["c"]
+
+    def count_daily_usage(self, days: int = 30) -> int:
+        """近 N 天内有会话记录的天数（用于分页，与 daily_usage 行数对应）"""
+        return self._conn.execute(
+            """SELECT COUNT(DISTINCT date(started_at)) AS c FROM sessions
+               WHERE started_at >= datetime('now', 'localtime', ?)""",
+            (f'-{days} days',)).fetchone()["c"]
 
     def daily_usage(self, days: int = 30,
                       limit: Optional[int] = None,
