@@ -8,26 +8,6 @@
     "port": 15677,
     "advertise_ip": ""
   },
-  "security": {
-    "secret_key": "change-me-to-a-long-random-string",
-    "admin_password": "change-me",
-    "code_valid_before_start_min": 120
-  },
-  "smtp": {
-    "enabled": false,
-    "host": "smtp.example.com",
-    "port": 465,
-    "username": "",
-    "password": "",
-    "use_tls": true,
-    "from_addr": "noreply@example.com"
-  },
-  "pricing": {
-    "currency": "CNY",
-    "input_audio_per_ktoken": 0,
-    "output_audio_per_ktoken": 0,
-    "output_text_per_ktoken": 0
-  },
   "audio": {
     "sample_rate": 16000,
     "channels": 1,
@@ -42,5 +22,26 @@
     "speaker_id": "",
     "speech_rate": 0,
     "comment": "speaker_id: 留空使用自动声音复刻（推荐）。指定公版音色仅支持：zh_female_vv_uranus_bigtts、zh_male_jingqiangkanye_emo_mars_bigtts。speech_rate: [-50, 100]，100 为 2.0 倍速，-50 为 0.5 倍速，0 为正常（需更新 proto 后生效）。"
+  },
+  "security": {
+    "secret_key": "change-me-to-a-long-random-string",
+    "admin_password": "change-me",
+    "code_valid_before_start_min": 120,
+    "admin_notify_emails": []
+  },
+  "smtp": {
+    "enabled": false,
+    "host": "smtp.internal.example.com",
+    "port": 25,
+    "username": "",
+    "password": "",
+    "use_tls": false,
+    "from_addr": "ast-noreply@example.com"
+  },
+  "pricing": {
+    "currency": "CNY",
+    "input_audio_per_ktoken": 0,
+    "output_audio_per_ktoken": 0,
+    "output_text_per_ktoken": 0
   }
 }

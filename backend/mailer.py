@@ -16,11 +16,12 @@ class Mailer:
     def __init__(self, smtp_config: dict):
         self.enabled = bool(smtp_config.get("enabled"))
         self.host = smtp_config.get("host", "")
-        self.port = int(smtp_config.get("port", 465))
+        self.port = int(smtp_config.get("port", 25))
         self.username = smtp_config.get("username", "")
         self.password = smtp_config.get("password", "")
-        self.use_tls = bool(smtp_config.get("use_tls", True))
-        self.from_addr = smtp_config.get("from_addr", self.username)
+        self.use_tls = bool(smtp_config.get("use_tls", False))
+        # 发件人：未配置时兜底（匿名内部邮件服务器场景 username 也为空）
+        self.from_addr = smtp_config.get("from_addr") or self.username or "ast-noreply@localhost"
 
     def _send_sync(self, to_addr: str, subject: str, body: str):
         msg = MIMEText(body, "plain", "utf-8")
@@ -28,6 +29,7 @@ class Mailer:
         msg["From"] = formataddr(("同声传译系统", self.from_addr))
         msg["To"] = to_addr
 
+        # 连接方式：465 走 SSL，其余端口直连（内部匿名中继常用 25 明文，use_tls=true 时尝试 STARTTLS）
         if self.use_tls and self.port == 465:
             server = smtplib.SMTP_SSL(self.host, self.port, timeout=15)
         else:
@@ -35,6 +37,7 @@ class Mailer:
         try:
             if self.use_tls and self.port != 465:
                 server.starttls()
+            # 匿名模式：username 留空则不做 LOGIN，适配无鉴权的内部邮件中继
             if self.username:
                 server.login(self.username, self.password)
             server.sendmail(self.from_addr, [to_addr], msg.as_string())
@@ -79,3 +82,27 @@ class Mailer:
 
 如有问题请联系系统管理员。"""
         return await self.send(to_addr, "【同声传译系统】访问码审批通过", body)
+
+    async def send_new_request_notify(self, notify_addrs: list, request_id: int,
+                                      applicant: str, email: str, department: str,
+                                      topic: str, planned_start: str,
+                                      duration_min: int, admin_url: str) -> bool:
+        """新申请到达时提醒管理员（发给多个收件人，任一失败不影响其他）"""
+        subject = f"【同声传译系统】新使用申请 #{request_id}：{applicant}"
+        body = f"""收到新的同声传译系统使用申请，请及时审批：
+
+申请编号：#{request_id}
+申请人：{applicant}（{email}）
+部门：{department or '-'}
+使用主题：{topic or '-'}
+计划使用时间：{planned_start}
+预计时长：{duration_min} 分钟
+
+审批入口：{admin_url}
+
+本邮件由系统自动发送。"""
+        sent_all = True
+        for addr in notify_addrs:
+            if not await self.send(addr, subject, body):
+                sent_all = False
+        return sent_all

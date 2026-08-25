@@ -44,7 +44,8 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-DB_PATH = os.path.join(project_root, 'data', 'access.db')
+# 数据库路径（测试时可用 AST_DB_PATH 指向独立文件，避免碰生产库）
+DB_PATH = os.environ.get('AST_DB_PATH') or os.path.join(project_root, 'data', 'access.db')
 
 
 def get_local_ip():
@@ -76,6 +77,9 @@ class AppContext:
         self.signer = CookieSigner(secret)
         self.admin_password = security.get("admin_password", "")
         self.valid_before_start_min = int(security.get("code_valid_before_start_min", 120))
+        # 新申请提醒收件人（配置后，有新申请自动发邮件通知管理员）
+        self.admin_notify_emails = [e.strip() for e in
+                                    security.get("admin_notify_emails", []) if e.strip()]
         self.pricing = config.get("pricing", {})
         self.db = AccessDB(DB_PATH)
         self.mailer = Mailer(config.get("smtp", {}))
@@ -104,6 +108,19 @@ class AppContext:
 
 def json_error(status: int, message: str) -> web.Response:
     return web.json_response({"ok": False, "error": message}, status=status)
+
+
+def _qint(value, default, lo=None, hi=None) -> int:
+    """安全地把 query string 转 int, 带边界裁剪。"""
+    try:
+        n = int(value)
+    except (TypeError, ValueError):
+        return default
+    if lo is not None:
+        n = max(lo, n)
+    if hi is not None:
+        n = min(hi, n)
+    return n
 
 
 # ---------- 公开接口：申请与访问码验证 ----------
@@ -145,6 +162,19 @@ async def api_submit_request(request):
                                        planned_start, duration)
     ctx.db.audit(email, "request_submitted", f"申请 #{request_id}: {applicant} / {topic}")
     logger.info(f"收到使用申请 #{request_id}: {applicant} <{email}> {planned_start} {duration}分钟")
+
+    # 新申请邮件提醒管理员（发送失败不影响用户提交结果）
+    if ctx.admin_notify_emails:
+        try:
+            base_url = f"{'https' if ctx.use_https else 'http'}://{request.host}/admin"
+            sent = await ctx.mailer.send_new_request_notify(
+                ctx.admin_notify_emails, request_id, applicant, email,
+                department, topic, planned_start, duration, base_url)
+            if not sent:
+                logger.warning("管理员提醒邮件发送失败，请管理员留意后台待审批列表")
+        except Exception as e:
+            logger.error(f"发送管理员提醒邮件失败: {e}")
+
     return web.json_response({"ok": True, "request_id": request_id,
                               "message": "申请已提交，审批通过后访问码将发送到你的邮箱"})
 
@@ -218,9 +248,16 @@ async def api_admin_login(request):
 
 async def api_admin_requests(request):
     ctx: AppContext = request.app['ctx']
-    status = request.query.get("status")
-    rows = ctx.db.list_requests(status)
-    return web.json_response({"ok": True, "requests": [dict(r) for r in rows]})
+    status = request.query.get("status") or None
+    q = (request.query.get("q") or "").strip() or None
+    limit = _qint(request.query.get("limit"), 200, lo=1, hi=1000)
+    offset = _qint(request.query.get("offset"), 0, lo=0)
+    rows = ctx.db.list_requests(status=status, q=q, limit=limit, offset=offset)
+    total = ctx.db.count_requests(status=status, q=q)
+    return web.json_response({
+        "ok": True, "total": total, "limit": limit, "offset": offset,
+        "requests": [dict(r) for r in rows]
+    })
 
 
 async def api_admin_approve(request):
@@ -266,8 +303,16 @@ async def api_admin_reject(request):
 
 async def api_admin_codes(request):
     ctx: AppContext = request.app['ctx']
-    rows = ctx.db.list_codes()
-    return web.json_response({"ok": True, "codes": [dict(r) for r in rows]})
+    status = request.query.get("status") or None
+    q = (request.query.get("q") or "").strip() or None
+    limit = _qint(request.query.get("limit"), 200, lo=1, hi=1000)
+    offset = _qint(request.query.get("offset"), 0, lo=0)
+    rows = ctx.db.list_codes(status=status, q=q, limit=limit, offset=offset)
+    total = ctx.db.count_codes(status=status, q=q)
+    return web.json_response({
+        "ok": True, "total": total, "limit": limit, "offset": offset,
+        "codes": [dict(r) for r in rows]
+    })
 
 
 async def api_admin_revoke(request):
@@ -320,13 +365,30 @@ async def api_admin_usage(request):
         d["cost"] = round(cost, 2)
         return d
 
+    by_code_limit = _qint(request.query.get("code_limit"), 200, lo=1, hi=1000)
+    by_code_offset = _qint(request.query.get("code_offset"), 0, lo=0)
+    by_code_total = ctx.db.count_usage_codes(days)
+    by_day_limit = _qint(request.query.get("day_limit"), 10, lo=1, hi=365)
+    by_day_offset = _qint(request.query.get("day_offset"), 0, lo=0)
     return web.json_response({
         "ok": True,
         "days": days,
         "currency": currency,
         "pricing": per_k,
-        "by_code": [with_cost(r) for r in ctx.db.usage_summary(days)],
-        "by_day": [with_cost(r) for r in ctx.db.daily_usage(days)],
+        "by_code": {
+            "total": by_code_total,
+            "limit": by_code_limit,
+            "offset": by_code_offset,
+            "rows": [with_cost(r) for r in ctx.db.usage_summary(
+                days, limit=by_code_limit, offset=by_code_offset)]
+        },
+        "by_day": {
+            "total": by_code_total,
+            "limit": by_day_limit,
+            "offset": by_day_offset,
+            "rows": [with_cost(r) for r in ctx.db.daily_usage(
+                days, limit=by_day_limit, offset=by_day_offset)]
+        },
     })
 
 
@@ -633,6 +695,18 @@ async def start_server(port=15677, use_https=False):
         logger.info("使用 --https 参数启动 HTTPS 服务器")
     if not ctx.admin_password:
         logger.warning("security.admin_password 未配置，管理后台无法登录！")
+    if ctx.mailer.enabled:
+        mode = "匿名" if not ctx.mailer.username else "账号鉴权"
+        logger.info(f"邮件通知: 已启用（{ctx.mailer.host}:{ctx.mailer.port}，{mode}，发件人 {ctx.mailer.from_addr}）")
+    else:
+        logger.info("邮件通知: 未启用（审批通过后请在管理页复制访问码手动发送）")
+    if ctx.admin_notify_emails:
+        if ctx.mailer.enabled:
+            logger.info(f"新申请提醒: 新申请将邮件通知 {', '.join(ctx.admin_notify_emails)}")
+        else:
+            logger.warning("security.admin_notify_emails 已配置但 smtp.enabled=false，新申请无法邮件提醒管理员")
+    else:
+        logger.info("新申请提醒: 未配置 security.admin_notify_emails，请管理员自行查看后台待审批列表")
     logger.info("=" * 60)
 
     try:

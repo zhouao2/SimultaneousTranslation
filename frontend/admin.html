@@ -52,9 +52,13 @@
         }
 
         /* ========== 顶部 Header ========== */
+        .header-center {
+            text-align: center;
+            margin: 0 0 22px;
+        }
         .header {
             display: inline-flex; align-items: center; gap: 14px;
-            margin: 0 auto 26px; padding: 10px 22px;
+            margin: 0; padding: 10px 22px;
             background: rgba(255,255,255,.14);
             border: 1px solid rgba(255,255,255,.22);
             border-radius: 14px;
@@ -107,12 +111,12 @@
         #loginErr { color: var(--danger-ink); font-size: 12.5px; margin-top: 10px; min-height: 16px; }
 
         /* ========== 主卡片 ========== */
+        .board-wrap { max-width: 1200px; margin: 0 auto; }
         .board {
             background: var(--bg-card); border-radius: 16px;
             padding: 22px 26px 28px;
             box-shadow: var(--shadow-lg);
             border: 1px solid rgba(255,255,255,.5);
-            max-width: 1200px; margin: 0 auto;
         }
 
         /* ========== 分段式标签页 ========== */
@@ -306,6 +310,147 @@
         /* 操作列按钮组 */
         td .btn.sm + .btn.sm { margin-left: 6px; }
 
+        /* ========== KPI 卡片 ========== */
+        .kpi-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+        .kpi {
+            background: #fff;
+            border: 1px solid var(--line);
+            border-radius: 12px;
+            padding: 14px 16px;
+            box-shadow: var(--shadow-sm);
+            position: relative; overflow: hidden;
+        }
+        .kpi::before {
+            content: ""; position: absolute; left: 0; top: 0; bottom: 0;
+            width: 3px;
+        }
+        .kpi.cost::before     { background: linear-gradient(180deg, #f39c12, #e67e22); }
+        .kpi.duration::before { background: linear-gradient(180deg, #667eea, #764ba2); }
+        .kpi.sessions::before { background: linear-gradient(180deg, #2ecc71, #27ae60); }
+        .kpi.codes::before    { background: linear-gradient(180deg, #9b59b6, #8e44ad); }
+        .kpi .label {
+            display: flex; align-items: center; gap: 6px;
+            font-size: 12px; color: var(--ink-3);
+            margin-bottom: 4px; letter-spacing: .3px;
+        }
+        .kpi .label .ico {
+            display: inline-flex; width: 20px; height: 20px;
+            align-items: center; justify-content: center;
+            border-radius: 6px; background: var(--primary-soft);
+            color: var(--primary); font-size: 12px;
+        }
+        .kpi.cost .label .ico     { background: #fef5e7; color: #e67e22; }
+        .kpi.duration .label .ico { background: #eef0f9; color: #667eea; }
+        .kpi.sessions .label .ico { background: #e8f8f0; color: #27ae60; }
+        .kpi.codes .label .ico    { background: #f4ecf7; color: #8e44ad; }
+        .kpi .value {
+            font-size: 22px; font-weight: 700; color: var(--ink-1);
+            font-variant-numeric: tabular-nums;
+            line-height: 1.2;
+        }
+        .kpi.cost .value { color: #c0392b; }
+        .kpi .sub {
+            font-size: 11.5px; color: var(--ink-3);
+            margin-top: 2px;
+        }
+        @media (max-width: 720px) {
+            .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+        }
+
+        /* ========== 横向 bar (用于按天 / 按码的 cost/duration 热度) ========== */
+        td .h-bar-wrap {
+            display: flex; align-items: center; gap: 6px;
+            min-width: 110px;
+        }
+        td .h-bar {
+            flex: 1; height: 6px; border-radius: 3px;
+            background: var(--line);
+            position: relative; overflow: hidden;
+            min-width: 60px;
+        }
+        td .h-bar > span {
+            display: block; height: 100%;
+            border-radius: 3px;
+            background: linear-gradient(90deg, #667eea, #764ba2);
+            transition: width .3s;
+        }
+        td .h-bar.hot > span   { background: linear-gradient(90deg, #e67e22, #c0392b); }
+        td .h-bar.warm > span  { background: linear-gradient(90deg, #f39c12, #e67e22); }
+        td .h-bar.cool > span  { background: linear-gradient(90deg, #2ecc71, #27ae60); }
+        td .h-bar-wrap .v {
+            font-variant-numeric: tabular-nums; font-size: 12.5px;
+            color: var(--ink-2); min-width: 50px; text-align: right;
+        }
+
+        /* token 占比 stacked bar (输入/输出/文本) */
+        td .token-bar {
+            display: flex; height: 6px; width: 110px;
+            border-radius: 3px; overflow: hidden; background: var(--line);
+        }
+        td .token-bar > span { display: block; height: 100%; }
+        td .token-bar .in  { background: #667eea; }
+        td .token-bar .out { background: #764ba2; }
+        td .token-bar .txt { background: #2ecc71; }
+        td .token-bar-wrap {
+            display: flex; align-items: center; gap: 8px;
+            font-variant-numeric: tabular-nums; font-size: 12px; color: var(--ink-2);
+        }
+
+        /* 表格总计行 */
+        tr.totals-row td {
+            background: var(--bg-soft) !important;
+            font-weight: 600; color: var(--ink-1);
+            border-top: 2px solid var(--line-strong);
+            border-bottom: none;
+        }
+        tr.totals-row:hover td { background: var(--bg-soft) !important; }
+
+        /* ========== 搜索 / 筛选工具栏 ========== */
+        .search-input {
+            flex: 1; min-width: 180px; max-width: 320px;
+            padding: 7px 12px 7px 32px;
+            border: 1px solid var(--line-strong); border-radius: 7px;
+            font-size: 13px; outline: none; background: #fff;
+            background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%237a7f99' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><circle cx='11' cy='11' r='7'/><path d='m21 21-4.3-4.3'/></svg>");
+            background-repeat: no-repeat; background-position: 10px center;
+            transition: border-color .15s, box-shadow .15s;
+        }
+        .search-input:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(102,126,234,.12);
+        }
+        .search-input::placeholder { color: var(--ink-4); }
+        .toolbar .count-info {
+            color: var(--ink-3); font-size: 12.5px;
+        }
+        .toolbar .count-info b { color: var(--ink-1); font-weight: 600; }
+
+        /* 加载更多 */
+        .loadmore {
+            display: flex; justify-content: center;
+            padding: 14px 0 4px;
+        }
+        .loadmore .btn { min-width: 140px; }
+        .loadmore .hint { color: var(--ink-4); font-size: 12.5px; align-self: center; }
+
+        /* 骨架 loading */
+        .skeleton {
+            display: block; height: 14px; margin: 8px 0;
+            background: linear-gradient(90deg, #eef0f7 25%, #f7f8fc 50%, #eef0f7 75%);
+            background-size: 200% 100%;
+            animation: skeleton 1.2s ease-in-out infinite;
+            border-radius: 4px;
+        }
+        @keyframes skeleton {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
+
         /* ========== 响应式 ========== */
         @media (max-width: 900px) {
             .board { padding: 18px 16px 22px; }
@@ -342,10 +487,13 @@
 
 <!-- 主界面 -->
 <div id="adminApp" class="hidden">
+    <div class="header-center">
     <div class="header">
         <h1><span class="badge">⚙</span>同声传译 · 管理后台</h1>
-        <p>申请审批 · 访问码管理 · 用量与成本 &nbsp;·&nbsp; <a href="/">返回首页</a></p>
+        <p>&nbsp;·&nbsp; <a href="/">返回首页</a></p>
     </div>
+    </div>
+    <div class="board-wrap">
     <div class="board">
         <div class="tabs">
             <div class="tab active has-badge" data-tab="requests" onclick="switchTab('requests')"><span class="dot"></span>使用申请<span class="count" id="tabBadgeRequests">0</span></div>
@@ -356,52 +504,175 @@
 
         <!-- 申请 -->
         <div class="panel" id="panel-requests">
-            <div class="section-title">待审批申请</div>
+            <div class="section-title">待审批申请 <span class="count-info" id="pendingInfo"></span></div>
+            <div class="toolbar">
+                <input type="text" class="search-input" id="pendingQ"
+                       placeholder="搜索申请人 / 邮箱 / 主题" autocomplete="off">
+                <span class="spacer"></span>
+                <button class="btn sm ghost" onclick="loadRequests()">⟳ 刷新</button>
+            </div>
             <div id="pendingTable"></div>
-            <div class="section-title" style="margin-top:24px;">已处理申请</div>
-            <div id="historyTable"></div>
+            <div class="loadmore" id="pendingMore"></div>
         </div>
 
         <!-- 访问码 -->
-        <div class="panel" id="panel-codes">
+        <div class="panel hidden" id="panel-codes">
             <div class="toolbar">
-                <button class="btn sm ghost" onclick="loadCodes()">⟳ 刷新</button>
-                <span class="pill">撤销后立即失效</span>
-                <span>预计时长仅作参考，不做额度限制</span>
+                <input type="text" class="search-input" id="codesQ"
+                       placeholder="搜索访问码 / 申请人 / 邮箱 / 主题" autocomplete="off">
+                <select id="codesStatus" onchange="resetAndLoad('codes')">
+                    <option value="">全部状态</option>
+                    <option value="active">有效</option>
+                    <option value="revoked">已撤销</option>
+                </select>
+                <button class="btn sm ghost" onclick="resetAndLoad('codes')">⟳ 刷新</button>
+                <span class="spacer"></span>
+                <span class="count-info" id="codesInfo">—</span>
             </div>
             <div id="codesTable"></div>
+            <div class="loadmore" id="codesMore"></div>
         </div>
 
         <!-- 用量 -->
-        <div class="panel" id="panel-usage">
+        <div class="panel hidden" id="panel-usage">
             <div class="toolbar">
-                统计范围：
-                <select id="usageDays" onchange="loadUsage()">
+                <span class="label">统计范围</span>
+                <select id="usageDays" onchange="resetAndLoad('usage')">
                     <option value="7">近 7 天</option>
                     <option value="30" selected>近 30 天</option>
                     <option value="90">近 90 天</option>
                 </select>
                 <span id="pricingInfo"></span>
             </div>
-            <div class="subtable">
-                <div class="section-title">按访问码</div>
-                <div id="usageByCode"></div>
+
+            <!-- KPI 卡片 -->
+            <div class="kpi-grid" id="usageKpi">
+                <div class="kpi cost">
+                    <div class="label"><span class="ico">💰</span>总成本</div>
+                    <div class="value" id="kpiCost">—</div>
+                    <div class="sub" id="kpiCostSub">—</div>
+                </div>
+                <div class="kpi duration">
+                    <div class="label"><span class="ico">🕐</span>音频时长</div>
+                    <div class="value" id="kpiDuration">—</div>
+                    <div class="sub" id="kpiDurationSub">—</div>
+                </div>
+                <div class="kpi sessions">
+                    <div class="label"><span class="ico">📊</span>总会话数</div>
+                    <div class="value" id="kpiSessions">—</div>
+                    <div class="sub" id="kpiSessionsSub">—</div>
+                </div>
+                <div class="kpi codes">
+                    <div class="label"><span class="ico">👥</span>活跃访问码</div>
+                    <div class="value" id="kpiCodes">—</div>
+                    <div class="sub" id="kpiCodesSub">—</div>
+                </div>
             </div>
-            <div class="subtable">
-                <div class="section-title">按天汇总</div>
+
+            <div class="toolbar" style="margin-top: 4px;">
+                <div class="tabs" style="margin: 0;">
+                    <div class="tab active" data-uview="code" onclick="switchUsageView('code')">
+                        <span class="dot"></span>按访问码 <span class="count-info" id="usageByCodeInfo" style="margin-left:6px;color:inherit;opacity:.85;"></span>
+                    </div>
+                    <div class="tab" data-uview="day" onclick="switchUsageView('day')">
+                        <span class="dot"></span>按天汇总 <span class="count-info" id="usageByDayInfo" style="margin-left:6px;color:inherit;opacity:.85;"></span>
+                    </div>
+                </div>
+                <span class="spacer"></span>
+            </div>
+            <div id="usageViewCode">
+                <div id="usageByCode"></div>
+                <div class="loadmore" id="usageByCodeMore"></div>
+            </div>
+            <div id="usageViewDay" class="hidden">
                 <div id="usageByDay"></div>
+                <div class="loadmore" id="usageByDayMore"></div>
             </div>
         </div>
 
         <!-- 审计 -->
-        <div class="panel" id="panel-audit">
+        <div class="panel hidden" id="panel-audit">
             <div id="auditTable"></div>
         </div>
+    </div>
     </div>
 </div>
 
 <script>
 let TAB = 'requests';
+// 分页状态: 每个 tab 独立 offset / limit, 全局累积 rows
+const PAGE = {
+    pending:     { offset: 0, limit: 10, total: 0, rows: [], loading: false, q: '' },
+    codes:       { offset: 0, limit: 10, total: 0, rows: [], loading: false, q: '', status: '' },
+    usageByCode: { offset: 0, limit: 10, total: 0, rows: [], loading: false, days: 30, rendered: false },
+    usageByDay:  { offset: 0, limit: 10, total: 0, rows: [], loading: false, days: 30, rendered: false },
+};
+// 当前选中的 subtab: 'code' 或 'day'
+let USAGE_VIEW = 'code';
+function switchUsageView(v) {
+    USAGE_VIEW = v;
+    document.querySelectorAll('[data-uview]').forEach(el => el.classList.toggle('active', el.dataset.uview === v));
+    document.getElementById('usageViewCode').classList.toggle('hidden', v !== 'code');
+    document.getElementById('usageViewDay').classList.toggle('hidden',  v !== 'day');
+    const targetState = (v === 'code') ? PAGE.usageByCode : PAGE.usageByDay;
+    if (!targetState.rendered) {
+        // 首次切到该 subtab: 只重置这一边, 拉首页 + 渲染, 不动另一边已加载的页
+        loadUsage(true, v);
+    } else {
+        // 目标 subtab 已渲染过, 但 B.rows 可能在用户停留在另一 subtab
+        // 点"加载更多"时后台累积了, 这里重渲染一次以让 DOM 跟上累积行数
+        loadUsage(false, v);
+    }
+}
+function debounce(fn, ms) {
+    let t = null;
+    return function (...args) {
+        clearTimeout(t);
+        t = setTimeout(() => fn.apply(this, args), ms);
+    };
+}
+function fmtInt(n) { return Number(n || 0).toLocaleString('zh-CN'); }
+function renderLoadMore(state, containerId, onLoad) {
+    const c = document.getElementById(containerId);
+    if (!c) return;
+    const shown = state.rows.length;
+    const remaining = state.total - shown;
+    if (state.loading) {
+        c.innerHTML = '<div class="hint">加载中…</div>';
+    } else if (remaining > 0) {
+        // 把函数体 stringify 到 onclick 里, 简单可靠
+        const body = onLoad.toString();
+        c.innerHTML = '<button class="btn sm ghost" onclick="(' + body + ')()">加载更多 · 还剩 ' + remaining + ' 条</button>'
+                    + '<span class="hint" style="margin-left:10px;">已显示 ' + shown + ' / ' + state.total + '</span>';
+    } else if (state.total > 0) {
+        c.innerHTML = '<span class="hint">已显示全部 ' + state.total + ' 条</span>';
+    } else {
+        c.innerHTML = '';
+    }
+}
+function resetAndLoad(tab) {
+    if (tab === 'codes') {
+        PAGE.codes.offset = 0; PAGE.codes.rows = [];
+        PAGE.codes.q = document.getElementById('codesQ').value.trim();
+        PAGE.codes.status = document.getElementById('codesStatus').value;
+        document.getElementById('codesTable').innerHTML = '<div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div>';
+        loadCodes(true);
+    } else if (tab === 'usage') {
+        PAGE.usageByCode.offset = 0; PAGE.usageByCode.rows = [];
+        PAGE.usageByDay.offset = 0; PAGE.usageByDay.rows = [];
+        const d = parseInt(document.getElementById('usageDays').value, 10);
+        PAGE.usageByCode.days = d; PAGE.usageByDay.days = d;
+        document.getElementById('usageByCode').innerHTML = '<div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div>';
+        document.getElementById('usageByDay').innerHTML = '<div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div>';
+        loadUsage(true);
+    } else if (tab === 'pending') {
+        PAGE.pending.offset = 0; PAGE.pending.rows = [];
+        PAGE.pending.q = (document.getElementById('pendingQ') || {}).value || '';
+        PAGE.pending.q = PAGE.pending.q.trim();
+        document.getElementById('pendingTable').innerHTML = '<div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div>';
+        loadRequests();
+    }
+}
 
 async function api(path, opts) {
     const resp = await fetch(path, opts);
@@ -446,7 +717,7 @@ document.getElementById('adminPwd').addEventListener('keydown', e => { if (e.key
 async function enterAdmin() {
     document.getElementById('loginWrap').classList.add('hidden');
     document.getElementById('adminApp').classList.remove('hidden');
-    await refreshAll();
+    switchTab('requests');
 }
 
 // ---------- Tab ----------
@@ -459,45 +730,52 @@ function switchTab(tab) {
 }
 async function refreshAll() {
     if (TAB === 'requests') await loadRequests();
-    else if (TAB === 'codes') await loadCodes();
-    else if (TAB === 'usage') await loadUsage();
+    else if (TAB === 'codes') await loadCodes(true);
+    else if (TAB === 'usage') await loadUsage(true);
     else if (TAB === 'audit') await loadAudit();
 }
 
 // ---------- 申请 ----------
-async function loadRequests() {
-    const data = await api('/api/admin/requests');
-    const pending = data.requests.filter(r => r.status === 'pending');
-    // 更新 tab 角标
+// loadRequests(append): undefined/false=从头加载, true=加载下一页
+async function loadRequests(append = false) {
+    const P = PAGE.pending;
+    if (!append) { P.offset = 0; P.rows = []; P.q = (document.getElementById('pendingQ')?.value || '').trim(); }
+
+    // tab 角标: 始终显示总待审批数(不受搜索影响)
     const badge = document.getElementById('tabBadgeRequests');
     if (badge) {
-      badge.textContent = pending.length;
-      badge.style.display = pending.length ? '' : 'none';
+      const allPending = await api('/api/admin/requests?status=pending&limit=1');
+      const n = allPending.total || 0;
+      badge.textContent = n;
+      badge.style.display = n > 0 ? '' : 'none';
     }
-    const done = data.requests.filter(r => r.status !== 'pending');
 
-    const pHtml = pending.length ? `<table><tr><th>ID</th><th>申请人</th><th>部门</th><th>主题</th><th>使用时间</th><th>时长</th><th>申请时间</th><th>操作</th></tr>
-        ${pending.map(r => `<tr>
-            <td>${r.id}</td><td><div class="applicant"><div class="name">${esc(r.applicant)}</div><div class="email">${esc(r.email)}</div></div></td>
+    P.loading = true;
+    renderLoadMore(P, 'pendingMore', () => loadRequests(true));
+    const qs = new URLSearchParams({ status: 'pending', q: P.q, limit: P.limit, offset: P.offset });
+    const data = await api('/api/admin/requests?' + qs.toString());
+    P.total = data.total || 0;
+    P.rows = append ? P.rows.concat(data.requests || []) : (data.requests || []);
+    P.offset = P.rows.length;
+    P.loading = false;
+
+    const info = document.getElementById('pendingInfo');
+    if (info) info.innerHTML = P.q ? `匹配 <b>${P.total}</b> 条` : `共 <b>${P.total}</b> 条`;
+
+    const pHtml = P.rows.length ? `<table><tr><th>申请人</th><th>部门</th><th>主题</th><th>使用时间</th><th>时长</th><th>申请时间</th><th>操作</th></tr>
+        ${P.rows.map(r => `<tr>
+            <td><div class="applicant"><div class="name">${esc(r.applicant)}</div><div class="email">${esc(r.email)}</div></div></td>
             <td>${esc(r.department) || '-'}</td><td>${esc(r.topic) || '-'}</td>
             <td>${fmtDT(r.planned_start)}</td><td>${r.planned_duration_min} 分钟</td>
-            <td>${fmtDT(r.created_at)}</td>
+            <td class="muted">${fmtDT(r.created_at)}</td>
             <td style="white-space:nowrap;">
                 <button class="btn sm ok" onclick="approve(${r.id})">通过</button>
                 <button class="btn sm danger" onclick="reject(${r.id})">拒绝</button>
             </td></tr>`).join('')}</table>`
-        : '<div class="empty"><div class="icon">✓</div>暂无待审批申请</div>';
+        : (P.q ? '<div class="empty"><div class="icon">🔍</div>没有匹配的申请</div>'
+               : '<div class="empty"><div class="icon">✓</div>暂无待审批申请</div>');
     document.getElementById('pendingTable').innerHTML = pHtml;
-
-    const statusTag = {approved: '已通过', rejected: '已拒绝'};
-    const dHtml = done.length ? `<table><tr><th>ID</th><th>申请人</th><th>主题</th><th>使用时间</th><th>状态</th><th>处理时间</th><th>备注</th></tr>
-        ${done.slice(0, 30).map(r => `<tr>
-            <td>${r.id}</td><td>${esc(r.applicant)}</td><td>${esc(r.topic) || '-'}</td>
-            <td>${fmtDT(r.planned_start)}</td>
-            <td><span class="tag ${r.status}">${statusTag[r.status] || r.status}</span></td>
-            <td>${fmtDT(r.reviewed_at)}</td><td>${esc(r.reject_reason) || ''}</td></tr>`).join('')}</table>`
-        : '<div class="empty"><div class="icon">📋</div>暂无历史申请</div>';
-    document.getElementById('historyTable').innerHTML = dHtml;
+    renderLoadMore(P, 'pendingMore', () => loadRequests(true));
 }
 
 async function approve(id) {
@@ -517,11 +795,22 @@ async function reject(id) {
     } catch (e) { toast(e.message, false); }
 }
 
-// ---------- 访问码 ----------
-async function loadCodes() {
-    const data = await api('/api/admin/codes');
-    const html = data.codes.length ? `<table><tr><th>访问码</th><th>申请人</th><th>主题</th><th>状态</th><th>使用时长 / 预计</th><th>生效时间</th><th>邮件</th><th>操作</th></tr>
-        ${data.codes.map(c => {
+// loadCodes(reset): true=从头加载, false=加载下一页
+async function loadCodes(reset = true) {
+    const C = PAGE.codes;
+    if (reset) { C.offset = 0; C.rows = []; }
+    C.loading = true;
+    renderLoadMore(C, 'codesMore', () => loadCodes(false));
+    const qs = new URLSearchParams({ q: C.q, status: C.status, limit: C.limit, offset: C.offset });
+    const data = await api('/api/admin/codes?' + qs.toString());
+    C.total = data.total || 0;
+    C.rows = C.rows.concat(data.codes || []);
+    C.offset = C.rows.length;
+    C.loading = false;
+    const info = document.getElementById('codesInfo');
+    if (info) info.innerHTML = C.q || C.status ? `匹配 <b>${C.total}</b> 条` : `共 <b>${C.total}</b> 条`;
+    const html = C.rows.length ? `<table><tr><th>访问码</th><th>申请人</th><th>主题</th><th>状态</th><th>使用时长 / 预计</th><th>生效时间</th><th>邮件</th><th>操作</th></tr>
+        ${C.rows.map(c => {
             return `<tr>
             <td class="code-val">${esc(c.code)}</td>
             <td><div class="applicant"><div class="name">${esc(c.applicant)}</div><div class="email">${esc(c.email)}</div></div></td>
@@ -535,12 +824,14 @@ async function loadCodes() {
                 <button class="btn sm ghost" onclick="resend(${c.id})">重发邮件</button>
             </td></tr>`;
         }).join('')}</table>`
-        : '<div class="empty"><div class="icon">🔑</div>暂无访问码</div>';
+        : (C.q || C.status ? '<div class="empty"><div class="icon">🔍</div>没有匹配的访问码</div>'
+                            : '<div class="empty"><div class="icon">🔑</div>暂无访问码</div>');
     document.getElementById('codesTable').innerHTML = html;
+    renderLoadMore(C, 'codesMore', () => loadCodes(false));
 }
 async function revokeCode(id) {
     if (!confirm('撤销后该访问码立即失效，确定？')) return;
-    try { await post('/api/admin/revoke', {code_id: id}); toast('已撤销'); await loadCodes(); }
+    try { await post('/api/admin/revoke', {code_id: id}); toast('已撤销'); await loadCodes(true); }
     catch (e) { toast(e.message, false); }
 }
 async function resend(id) {
@@ -548,35 +839,166 @@ async function resend(id) {
     catch (e) { toast(e.message, false); }
 }
 
-// ---------- 用量 ----------
-async function loadUsage() {
-    const days = document.getElementById('usageDays').value;
-    const data = await api('/api/admin/usage?days=' + days);
+// 把毫秒时长格式化成 "Xh Ym" / "Ym" / "X秒"
+function fmtDur(ms) {
+    const sec = Math.round(ms / 1000);
+    if (sec < 60) return sec + '秒';
+    const min = Math.floor(sec / 60);
+    if (min < 60) return min + '分钟';
+    const h = Math.floor(min / 60);
+    const m = min % 60;
+    return m ? h + 'h ' + m + 'm' : h + 'h';
+}
+// 根据值的相对位置返回 bar 的热度等级 (cool/warm/hot)
+function heatClass(ratio) {
+    if (ratio >= 0.66) return 'hot';
+    if (ratio >= 0.33) return 'warm';
+    return 'cool';
+}
+
+// loadUsage(reset, view):
+//   reset=true, view=null -> 重置两边 + 拉首页 + 两边都渲染 (首次进入 / 范围变化)
+//   reset=true, view='code'|'day' -> 只重置 view 一边 + 拉首页 + 渲染 view (切换 subtab 首次补渲染)
+//   reset=false, view='code'|'day' -> 加载下一页, 只把 view 一边追加渲染 (另一边也 concat 以更新 KPI)
+async function loadUsage(reset = true, view = null) {
+    const days = parseInt(document.getElementById('usageDays').value, 10);
+    const A = PAGE.usageByCode;
+    const B = PAGE.usageByDay;
+    // 防止重复请求: 如果两边都已经在 loading, 直接返回
+    if (A.loading && B.loading) return;
+    const target = view || USAGE_VIEW;       // 不传 view 时按当前 subtab 决定
+    const renderAll = reset && !view;         // 首次进入 / 范围变化 -> 两边都渲染
+    if (reset) {
+        A.offset = 0; A.rows = []; A.days = days; A.rendered = false;
+        B.offset = 0; B.rows = []; B.days = days; B.rendered = false;
+    }
+    A.loading = true; B.loading = true;
+    renderLoadMore(A, 'usageByCodeMore', () => loadUsage(false, 'code'));
+    renderLoadMore(B, 'usageByDayMore',  () => loadUsage(false, 'day'));
+    // 一次 API 拉两边, 按 target 决定追加/渲染哪一边 (renderAll=true 时两边都渲染)
+    const qs = new URLSearchParams({
+        days,
+        code_limit: A.limit, code_offset: A.offset,
+        day_limit:  B.limit, day_offset:  B.offset,
+    });
+    const data = await api('/api/admin/usage?' + qs.toString());
     const p = data.pricing || {};
     const configured = (p.input_audio_per_ktoken || p.output_audio_per_ktoken || p.output_text_per_ktoken);
+    const currency = data.currency || 'CNY';
     document.getElementById('pricingInfo').textContent = configured
-        ? `单价（每千 token，${data.currency}）：输入音频 ${p.input_audio_per_ktoken} / 输出音频 ${p.output_audio_per_ktoken} / 输出文本 ${p.output_text_per_ktoken}`
+        ? `单价（每千 token，${currency}）：输入音频 ${p.input_audio_per_ktoken} / 输出音频 ${p.output_audio_per_ktoken} / 输出文本 ${p.output_text_per_ktoken}`
         : '未配置 token 单价（config.json pricing 节），成本列显示为 0';
 
-    const byCode = data.by_code.filter(r => r.session_count > 0 || r.used_sec > 0);
-    document.getElementById('usageByCode').innerHTML = byCode.length ? `<table>
-        <tr><th>访问码</th><th>申请人</th><th>会话数</th><th>使用时长</th><th>音频时长</th><th>输入音频 token</th><th>输出音频 token</th><th>输出文本 token</th><th>成本(${data.currency})</th></tr>
-        ${byCode.map(r => `<tr>
-            <td class="code-val">${esc(r.code)}</td><td>${esc(r.applicant)}</td>
-            <td>${r.session_count}</td><td>${fmtMin(r.used_sec)}</td>
-            <td>${(r.duration_msec / 1000 / 60).toFixed(1)} 分钟</td>
-            <td>${(+r.input_audio_tokens).toFixed(0)}</td><td>${(+r.output_audio_tokens).toFixed(0)}</td><td>${(+r.output_text_tokens).toFixed(0)}</td>
-            <td>${r.cost.toFixed(2)}</td></tr>`).join('')}</table>`
-        : '<div class="empty"><div class="icon">📊</div>所选时间范围内暂无用量</div>';
+    // ===== 按访问码 =====
+    A.total = (data.by_code && data.by_code.total) || 0;
+    A.rows = A.rows.concat((data.by_code && data.by_code.rows) || []);
+    A.offset = A.rows.length;
+    A.loading = false;
+    const byCode = A.rows.filter(r => r.session_count > 0 || r.used_sec > 0);
+    byCode.sort((a, b) => b.cost - a.cost);
+    // 聚合 (KPI 也要用, 必须放 if 外)
+    const maxCost = Math.max(1, ...byCode.map(r => r.cost));
+    const maxDur = Math.max(1, ...byCode.map(r => r.duration_msec));
+    const sumCost = byCode.reduce((s, r) => s + r.cost, 0);
+    const sumDur = byCode.reduce((s, r) => s + r.duration_msec, 0);
+    const sumSessions = byCode.reduce((s, r) => s + r.session_count, 0);
+    const sumInT = byCode.reduce((s, r) => s + (r.input_audio_tokens || 0), 0);
+    const sumOutT = byCode.reduce((s, r) => s + (r.output_audio_tokens || 0), 0);
+    const sumTxtT = byCode.reduce((s, r) => s + (r.output_text_tokens || 0), 0);
 
-    document.getElementById('usageByDay').innerHTML = data.by_day.length ? `<table>
-        <tr><th>日期</th><th>会话数</th><th>音频时长</th><th>输入音频 token</th><th>输出音频 token</th><th>输出文本 token</th><th>成本(${data.currency})</th></tr>
-        ${data.by_day.map(r => `<tr>
-            <td>${r.day}</td><td>${r.session_count}</td>
-            <td>${(r.duration_msec / 1000 / 60).toFixed(1)} 分钟</td>
-            <td>${(+r.input_audio_tokens).toFixed(0)}</td><td>${(+r.output_audio_tokens).toFixed(0)}</td><td>${(+r.output_text_tokens).toFixed(0)}</td>
-            <td>${r.cost.toFixed(2)}</td></tr>`).join('')}</table>`
+    if (renderAll || target === 'code') {
+    const infoA = document.getElementById('usageByCodeInfo');
+    if (infoA) infoA.innerHTML = A.total ? `共 <b>${A.rows.length}</b> / ${A.total} 个访问码` : '';
+    document.getElementById('usageByCode').innerHTML = byCode.length ? `<table>
+        <tr><th>访问码</th><th>申请人</th><th class="num">会话</th><th>时长</th><th>成本热度</th><th class="num">成本(${currency})</th></tr>
+        ${byCode.map(r => {
+            const cRatio = r.cost / maxCost;
+            const dRatio = r.duration_msec / maxDur;
+            const totalT = (r.input_audio_tokens || 0) + (r.output_audio_tokens || 0) + (r.output_text_tokens || 0);
+            return `<tr>
+            <td class="code-val">${esc(r.code)}</td>
+            <td><div class="applicant"><div class="name">${esc(r.applicant)}</div><div class="email">${esc(r.email || '')}</div></div></td>
+            <td class="num">${r.session_count}</td>
+            <td>${fmtDur(r.duration_msec)}</td>
+            <td><div class="h-bar-wrap">
+                <div class="h-bar ${heatClass(cRatio)}"><span style="width:${(cRatio*100).toFixed(0)}%"></span></div>
+                <span class="v">${fmtDur(dRatio * maxDur)}</span>
+            </div></td>
+            <td class="num"><b>${r.cost.toFixed(2)}</b></td></tr>`;
+        }).join('')}
+        <tr class="totals-row">
+            <td colspan="2">总计 / 平均</td>
+            <td class="num">${sumSessions}</td>
+            <td>${fmtDur(sumDur)}</td>
+            <td class="muted" style="font-weight:normal;font-size:12px;">活跃 ${byCode.length} 码 / 平均 ${byCode.length ? (sumCost/byCode.length).toFixed(2) : '0.00'}</td>
+            <td class="num"><b>${sumCost.toFixed(2)}</b></td>
+        </tr>
+        </table>`
+        : '<div class="empty"><div class="icon">📊</div>所选时间范围内暂无用量</div>';
+    renderLoadMore(A, 'usageByCodeMore', () => loadUsage(false, 'code'));
+        A.rendered = true;
+    }  // 关闭 if (renderAll || target === 'code')
+
+    // ===== 按天汇总 =====
+    B.total = (data.by_day && data.by_day.total) || 0;
+    B.rows = B.rows.concat((data.by_day && data.by_day.rows) || []);
+    B.offset = B.rows.length;
+    B.loading = false;
+    const byDay = B.rows.slice();
+    if (renderAll || target === 'day') {
+    const infoB = document.getElementById('usageByDayInfo');
+    if (infoB) infoB.innerHTML = B.total ? `共 <b>${B.rows.length}</b> / ${B.total} 天` : '';
+
+    // 按日期降序 (后端已经 ORDER BY day DESC, 这里保持)
+    const maxDayCost = Math.max(1, ...byDay.map(r => r.cost || 0));
+    const sumDayCost = byDay.reduce((s, r) => s + (r.cost || 0), 0);
+    const sumDayDur = byDay.reduce((s, r) => s + (r.duration_msec || 0), 0);
+    const sumDaySess = byDay.reduce((s, r) => s + (r.session_count || 0), 0);
+
+    document.getElementById('usageByDay').innerHTML = byDay.length ? `<table>
+        <tr><th>日期</th><th class="num">会话</th><th>时长</th><th>成本热度</th><th class="num">成本(${currency})</th></tr>
+        ${byDay.map(r => {
+            const cRatio = (r.cost || 0) / maxDayCost;
+            return `<tr>
+            <td>${r.day}</td>
+            <td class="num">${r.session_count}</td>
+            <td>${fmtDur(r.duration_msec)}</td>
+            <td><div class="h-bar-wrap">
+                <div class="h-bar ${heatClass(cRatio)}"><span style="width:${(cRatio*100).toFixed(0)}%"></span></div>
+            </div></td>
+            <td class="num"><b>${(r.cost || 0).toFixed(2)}</b></td></tr>`;
+        }).join('')}
+        <tr class="totals-row">
+            <td>总计</td>
+            <td class="num">${sumDaySess}</td>
+            <td>${fmtDur(sumDayDur)}</td>
+            <td class="muted" style="font-weight:normal;font-size:12px;">日均 ${byDay.length ? (sumDayCost/byDay.length).toFixed(2) : '0.00'}</td>
+            <td class="num"><b>${sumDayCost.toFixed(2)}</b></td>
+        </tr>
+        </table>`
         : '<div class="empty"><div class="icon">📊</div>暂无数据</div>';
+    renderLoadMore(B, 'usageByDayMore', () => loadUsage(false, 'day'));
+        B.rendered = true;
+    }  // 关闭 if (renderAll || target === 'day')
+
+    // ===== KPI 卡片 =====
+    // by_code 已聚合: 总成本/总时长/总会话/活跃码数 (按 cost > 0 过滤)
+    const activeCodes = byCode.length;
+    const totalCost = sumCost;
+    const totalDur = sumDur;
+    const totalSess = sumSessions;
+    const fmtCurrency = (v) => v.toFixed(2);
+    const setEl = (id, html) => { const e = document.getElementById(id); if (e) e.innerHTML = html; };
+    setEl('kpiCost', currency + ' ' + fmtCurrency(totalCost));
+    setEl('kpiCostSub', configured
+        ? `${sumInT ? '输入音频 ' + fmtInt(sumInT) : ''}${sumOutT ? ' · 输出音频 ' + fmtInt(sumOutT) : ''}${sumTxtT ? ' · 文本 ' + fmtInt(sumTxtT) : ''}`
+        : '未配置 token 单价');
+    setEl('kpiDuration', fmtDur(totalDur));
+    setEl('kpiDurationSub', '合计 ' + totalSess + ' 个会话');
+    setEl('kpiSessions', fmtInt(totalSess));
+    setEl('kpiSessionsSub', activeCodes + ' 个活跃访问码');
+    setEl('kpiCodes', fmtInt(activeCodes));
+    setEl('kpiCodesSub', A.total ? '总 ' + A.total + ' 个访问码' : '—');
 }
 
 // ---------- 审计 ----------
@@ -597,6 +1019,16 @@ async function loadAudit() {
 }
 
 // ---------- 初始化：探测登录态 ----------
+// 搜索框防抖: codes / pending
+// 脚本位于 </body> 之前, DOM 已就绪, 直接绑定即可
+const _codesQDebounced = debounce(() => resetAndLoad('codes'), 300);
+const _pendingQDebounced = debounce(() => resetAndLoad('pending'), 300);
+(function bindSearchInputs() {
+    const q = document.getElementById('codesQ');
+    if (q) q.addEventListener('input', _codesQDebounced);
+    const pq = document.getElementById('pendingQ');
+    if (pq) pq.addEventListener('input', _pendingQDebounced);
+})();
 (async function () {
     try {
         await api('/api/admin/codes');

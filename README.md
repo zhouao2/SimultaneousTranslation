@@ -290,7 +290,8 @@ Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
 上线前需要在 `config/config.json` 中配置：
 - `security.secret_key`：随机长字符串（签名登录态 cookie 用）
 - `security.admin_password`：管理后台密码
-- `smtp.*`：邮件服务器（可选，未配置时审批通过后到管理页复制访问码）
+- `security.admin_notify_emails`：管理员邮箱列表（可选）。配置后**有新申请会自动邮件提醒**，邮件内附审批入口链接，不用天天盯后台
+- `smtp.*`：邮件服务器（可选，未配置时审批通过后到管理页复制访问码）。**支持匿名内部邮件中继**：`username`/`password` 留空即不鉴权，典型配置为 `port: 25`、`use_tls: false`；需要鉴权的外部邮箱则填写账号密码（465 端口 + `use_tls: true` 走 SSL，587 + `use_tls: true` 走 STARTTLS）
 
 ## 项目结构
 

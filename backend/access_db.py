@@ -121,12 +121,38 @@ class AccessDB:
         return self._conn.execute(
             "SELECT * FROM requests WHERE id = ?", (request_id,)).fetchone()
 
-    def list_requests(self, status: Optional[str] = None) -> list:
+    def list_requests(self, status: Optional[str] = None,
+                       q: Optional[str] = None,
+                       limit: Optional[int] = None,
+                       offset: int = 0) -> list:
+        where, params = [], []
         if status:
-            return self._conn.execute(
-                "SELECT * FROM requests WHERE status = ? ORDER BY id DESC", (status,)).fetchall()
-        return self._conn.execute(
-            "SELECT * FROM requests ORDER BY id DESC").fetchall()
+            where.append("status = ?"); params.append(status)
+        if q:
+            where.append("(applicant LIKE ? OR email LIKE ? OR topic LIKE ?)")
+            like = f"%{q}%"; params.extend([like, like, like])
+        sql = "SELECT * FROM requests"
+        if where:
+            sql += " WHERE " + " AND ".join(where)
+        sql += " ORDER BY id DESC"
+        if limit is not None and limit > 0:
+            sql += " LIMIT ? OFFSET ?"; params.extend([limit, offset])
+        return self._conn.execute(sql, params).fetchall()
+
+    def count_requests(self, status: Optional[str] = None,
+                       q: Optional[str] = None) -> int:
+        where, params = [], []
+        if status == "done":
+            where.append("status != 'pending'")
+        elif status:
+            where.append("status = ?"); params.append(status)
+        if q:
+            where.append("(applicant LIKE ? OR email LIKE ? OR topic LIKE ?)")
+            like = f"%{q}%"; params.extend([like, like, like])
+        sql = "SELECT COUNT(*) AS c FROM requests"
+        if where:
+            sql += " WHERE " + " AND ".join(where)
+        return self._conn.execute(sql, params).fetchone()["c"]
 
     def has_pending_request_from(self, email: str) -> bool:
         row = self._conn.execute(
@@ -203,8 +229,36 @@ class AccessDB:
         with self._lock, self._conn:
             self._conn.execute("UPDATE codes SET email_status = ? WHERE id = ?", (status, code_id))
 
-    def list_codes(self) -> list:
-        return self._conn.execute("SELECT * FROM codes ORDER BY id DESC").fetchall()
+    def list_codes(self, status: Optional[str] = None,
+                    q: Optional[str] = None,
+                    limit: Optional[int] = None,
+                    offset: int = 0) -> list:
+        where, params = [], []
+        if status:
+            where.append("status = ?"); params.append(status)
+        if q:
+            where.append("(code LIKE ? OR applicant LIKE ? OR email LIKE ? OR topic LIKE ?)")
+            like = f"%{q}%"; params.extend([like, like, like, like])
+        sql = "SELECT * FROM codes"
+        if where:
+            sql += " WHERE " + " AND ".join(where)
+        sql += " ORDER BY id DESC"
+        if limit is not None and limit > 0:
+            sql += " LIMIT ? OFFSET ?"; params.extend([limit, offset])
+        return self._conn.execute(sql, params).fetchall()
+
+    def count_codes(self, status: Optional[str] = None,
+                    q: Optional[str] = None) -> int:
+        where, params = [], []
+        if status:
+            where.append("status = ?"); params.append(status)
+        if q:
+            where.append("(code LIKE ? OR applicant LIKE ? OR email LIKE ? OR topic LIKE ?)")
+            like = f"%{q}%"; params.extend([like, like, like, like])
+        sql = "SELECT COUNT(*) AS c FROM codes"
+        if where:
+            sql += " WHERE " + " AND ".join(where)
+        return self._conn.execute(sql, params).fetchone()["c"]
 
     # ---------- 会话与用量 ----------
 
@@ -267,10 +321,11 @@ class AccessDB:
 
     # ---------- 报表 ----------
 
-    def usage_summary(self, days: int = 30) -> list:
+    def usage_summary(self, days: int = 30,
+                        limit: Optional[int] = None,
+                        offset: int = 0) -> list:
         """按访问码聚合用量（近 N 天有活动的码）"""
-        return self._conn.execute(
-            """SELECT c.id, c.code, c.applicant, c.department, c.topic, c.status,
+        sql = """SELECT c.id, c.code, c.applicant, c.department, c.topic, c.status,
                       c.quota_min, c.used_sec,
                       COALESCE(SUM(s.duration_msec), 0) AS duration_msec,
                       COALESCE(SUM(s.input_audio_tokens), 0) AS input_audio_tokens,
@@ -279,13 +334,24 @@ class AccessDB:
                       COUNT(s.id) AS session_count
                FROM codes c LEFT JOIN sessions s ON s.code_id = c.id
                     AND s.started_at >= datetime('now', 'localtime', ?)
-               GROUP BY c.id ORDER BY c.id DESC""",
-            (f'-{days} days',)).fetchall()
+               GROUP BY c.id ORDER BY c.id DESC"""
+        params = [f'-{days} days']
+        if limit is not None and limit > 0:
+            sql += " LIMIT ? OFFSET ?"
+            params.extend([limit, offset])
+        return self._conn.execute(sql, params).fetchall()
 
-    def daily_usage(self, days: int = 30) -> list:
-        """按天聚合全部用量"""
+    def count_usage_codes(self, days: int = 30) -> int:
+        """按访问码聚合时,总共有多少码在该时间窗内有/无活动（用于分页）"""
         return self._conn.execute(
-            """SELECT date(started_at) AS day,
+            "SELECT COUNT(*) AS c FROM codes"
+        ).fetchone()["c"]
+
+    def daily_usage(self, days: int = 30,
+                      limit: Optional[int] = None,
+                      offset: int = 0) -> list:
+        """按天聚合全部用量"""
+        sql = """SELECT date(started_at) AS day,
                       COUNT(*) AS session_count,
                       COALESCE(SUM(duration_msec), 0) AS duration_msec,
                       COALESCE(SUM(input_audio_tokens), 0) AS input_audio_tokens,
@@ -293,8 +359,12 @@ class AccessDB:
                       COALESCE(SUM(output_text_tokens), 0) AS output_text_tokens
                FROM sessions
                WHERE started_at >= datetime('now', 'localtime', ?)
-               GROUP BY date(started_at) ORDER BY day DESC""",
-            (f'-{days} days',)).fetchall()
+               GROUP BY date(started_at) ORDER BY day DESC"""
+        params = [f'-{days} days']
+        if limit is not None and limit > 0:
+            sql += " LIMIT ? OFFSET ?"
+            params.extend([limit, offset])
+        return self._conn.execute(sql, params).fetchall()
 
     def close(self):
         with self._lock:
