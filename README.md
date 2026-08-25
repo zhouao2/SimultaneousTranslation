@@ -158,6 +158,12 @@ Windows PowerShell：
 .\start.ps1 -Http
 ```
 
+**两个启动脚本的行为**（`start.sh` / `start.ps1` 一致）：
+- 自动选择 Python 解释器：优先项目自带的 `.doubao`（macOS/Linux）或 `.doubao`/`.venv`（Windows，`Scripts\python.exe`）虚拟环境，找不到才用系统 Python；
+- 端口被占用时**自动关闭占用进程后启动**（`start.sh --keep-port` / `start.ps1 -KeepPort` 可改为报错退出）；
+- 默认端口读取 `config/config.json` 的 `server.port`，命令行参数可覆盖；
+- `-Install`（`--install`）可在启动前安装依赖。
+
 **注意**：如果 PowerShell 提示执行策略错误，运行以下命令：
 
 ```powershell
