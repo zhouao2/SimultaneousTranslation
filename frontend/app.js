@@ -55,6 +55,8 @@ class TranslationApp {
         this.ttsHealthCheckInterval = null;  // TTS 健康检查定时器
         this.lastTTSPlayTime = null;  // 最后一次 TTS 播放时间
         this.maxTTSQueueSize = 10;  // 最大队列长度，防止无限堆积
+        this.ttsDropCount = 0;  // 队列连续丢弃计数（用于卡死检测）
+        this.lastTTSResetTime = 0;  // 上次强制重置播放状态的时间（防止频繁重置）
         // 复用的音频处理链节点（避免每次创建导致音色变化）
         this.ttsCompressor = null;
         this.ttsLowShelf = null;
@@ -1913,6 +1915,7 @@ class TranslationApp {
                 if (this.ttsAudioQueue.length >= this.maxTTSQueueSize) {
                     console.warn(`⚠️ TTS 音频队列已满（${this.maxTTSQueueSize}），丢弃最旧的音频`);
                     this.ttsAudioQueue.shift();  // 移除最旧的音频
+                    this.ttsDropCount++;
                 }
                 console.log(`⏸️ 当前正在播放TTS音频，将新音频加入队列（队列长度: ${this.ttsAudioQueue.length + 1}/${this.maxTTSQueueSize}）`);
                 this.ttsAudioQueue.push(mergedData);
@@ -2075,10 +2078,86 @@ class TranslationApp {
                     this.playNextQueuedTTS();
                 }
             }
-            
+
+            // 5. 兜底：既没在真正播放，队列又在持续丢弃 → 播放器已卡死，强制重置
+            //    触发条件：连续丢弃 >= 3 个音频，且距上次成功开始播放超过 20 秒
+            //    （说明 isPlayingTTS 卡在 true，新音频全被丢弃，需重建整个播放状态）
+            const DROP_COUNT_THRESHOLD = 3;      // 连续丢弃阈值
+            const STALL_DURATION_MS = 20000;     // 判定卡死的无播放时长
+            const RESET_COOLDOWN_MS = 30000;     // 两次强制重置之间的最小间隔
+
+            if (this.ttsDropCount >= DROP_COUNT_THRESHOLD) {
+                const timeSinceLastPlay = this.lastTTSPlayTime ? Date.now() - this.lastTTSPlayTime : Infinity;
+                const timeSinceLastReset = Date.now() - this.lastTTSResetTime;
+                const notReallyPlaying = !this.lastTTSPlayTime || timeSinceLastPlay > STALL_DURATION_MS;
+
+                if (notReallyPlaying && timeSinceLastReset >= RESET_COOLDOWN_MS) {
+                    console.error(`🚨 检测到 TTS 播放器卡死（连续丢弃 ${this.ttsDropCount} 个音频，距上次成功播放 ${this.lastTTSPlayTime ? Math.round(timeSinceLastPlay / 1000) + ' 秒' : '从未播放'}），强制重置播放状态并重建 AudioContext`);
+                    await this.forceResetTTSPlayer();
+                }
+            }
+
         } catch (error) {
             console.error('TTS 健康检查失败:', error);
         }
+    }
+
+    async forceResetTTSPlayer() {
+        /**
+         * 强制重置整个 TTS 播放状态
+         * 清除卡死的播放标志、当前音频和队列，并重建 AudioContext
+         */
+        this.lastTTSResetTime = Date.now();
+        this.ttsDropCount = 0;
+
+        // 清除超时定时器
+        if (this.ttsPlayTimeout) {
+            clearTimeout(this.ttsPlayTimeout);
+            this.ttsPlayTimeout = null;
+        }
+
+        // 停止当前音频
+        if (this.currentTTSAudio) {
+            try {
+                this.currentTTSAudio.pause();
+            } catch (e) {}
+            this.currentTTSAudio = null;
+        }
+
+        // 清空队列和播放状态
+        const droppedCount = this.ttsAudioQueue.length;
+        this.ttsAudioQueue = [];
+        this.isPlayingTTS = false;
+        this.ttsPlayStartTime = null;
+        this.ttsAudioBuffer = [];
+
+        // 重建 AudioContext（关闭旧的，创建新的，重置处理链节点）
+        if (this.ttsAudioContext && this.ttsAudioContext.state !== 'closed') {
+            const oldContext = this.ttsAudioContext;
+            this.ttsAudioContext = null;
+            try {
+                await oldContext.close();
+            } catch (e) {
+                console.warn('关闭旧 AudioContext 失败:', e);
+            }
+        }
+        this.ttsAudioContext = null;
+        this.ttsCompressor = null;
+        this.ttsLowShelf = null;
+        this.ttsMidPeak = null;
+        this.ttsGainNode = null;
+
+        // 直接创建新的 AudioContext（ensureAudioContextRunning 在 context 为 null 时不会创建）
+        try {
+            this.ttsAudioContext = new (window.AudioContext || window.webkitAudioContext)({
+                sampleRate: 24000
+            });
+            console.log('✓ 强制重置：已重建 AudioContext，状态:', this.ttsAudioContext.state);
+        } catch (e) {
+            console.error('重建 AudioContext 失败:', e);
+        }
+
+        console.warn(`🚨 TTS 播放器已强制重置（丢弃了 ${droppedCount} 个排队音频），后续句子的 TTS 将恢复正常播放`);
     }
     
     async playTTSAudio(audioData, isComplete = false) {
@@ -2424,6 +2503,8 @@ class TranslationApp {
                 console.log('gainNode 音量:', gainNode ? gainNode.gain.value : 'N/A');
                 this.isPlayingTTS = true;
                 this.ttsPlayStartTime = Date.now();
+                this.lastTTSPlayTime = Date.now();
+                this.ttsDropCount = 0;  // 播放正常，清除丢弃计数
 
                 // 设置超时检测（如果音频播放超过 30 秒还没结束，强制重置状态）
                 this.ttsPlayTimeout = setTimeout(() => {
@@ -2768,6 +2849,8 @@ class TranslationApp {
                 console.log('▶️ iOS TTS 音频开始播放');
                 this.isPlayingTTS = true;
                 this.ttsPlayStartTime = Date.now();
+                this.lastTTSPlayTime = Date.now();
+                this.ttsDropCount = 0;  // 播放正常，清除丢弃计数
             };
 
             audio.onended = () => {

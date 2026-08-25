@@ -57,9 +57,8 @@ pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
 cp config/config.example.json config/config.json
 ```
 
-编辑 `config/config.json`，填入以下信息：
-- `app_id`: 火山引擎 APP ID
-- `access_key`: 火山引擎 Access Key
+编辑 `config/config.json`，填入以下信息:
+- `api_key`: 火山引擎 API Key（新版控制台获取）
 - `resource_id`: 资源 ID（默认：volc.service_type.10053）
 
 ### 3. TTS 音色配置（S2S 模式）
@@ -316,8 +315,7 @@ Simultaneous_Translation/
 在 `config/config.json` 中配置以下参数：
 
 **火山引擎配置：**
-- `volcengine.app_id`: 火山引擎 APP ID
-- `volcengine.access_key`: 火山引擎 Access Key  
+- `volcengine.api_key`: 火山引擎 API Key
 - `volcengine.resource_id`: 资源 ID（默认：volc.service_type.10053）
 
 **服务器配置：**

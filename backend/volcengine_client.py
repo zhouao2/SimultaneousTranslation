@@ -40,26 +40,28 @@ class VolcengineASTClient:
 
     AST_WS_URL = "wss://openspeech.bytedance.com/api/v4/ast/v2/translate"
 
-    def __init__(self, app_id: str, access_key: str, resource_id: str,
+    def __init__(self, api_key: str, resource_id: str = "volc.service_type.10053",
                  source_lang: str = "zh", target_lang: str = "en",
-                 tts_speaker_id: str = ""):
+                 tts_speaker_id: str = "", speech_rate: int = 0):
         """
-        初始化客户端
+        初始化客户端（新版控制台 X-Api-Key 鉴权）
 
         Args:
-            app_id: APP ID
-            access_key: Access Key
-            resource_id: Resource ID
+            api_key: API Key（火山引擎控制台获取）
+            resource_id: 资源 ID
             source_lang: 源语言，默认中文
             target_lang: 目标语言，默认英文
-            tts_speaker_id: TTS 说话人ID，用于控制音色（留空使用默认音色）
+            tts_speaker_id: TTS 说话人ID。可选公版音色：
+                zh_female_vv_uranus_bigtts / zh_male_jingqiangkanye_emo_mars_bigtts；
+                留空则自动复刻输入说话人音色
+            speech_rate: 语速，取值 [-50, 100]，100 代表 2.0 倍速，-50 代表 0.5 倍速，0 为正常
         """
-        self.app_id = app_id
-        self.access_key = access_key
+        self.api_key = api_key
         self.resource_id = resource_id
         self.source_lang = source_lang
         self.target_lang = target_lang
         self.tts_speaker_id = tts_speaker_id
+        self.speech_rate = speech_rate
         self.websocket: Optional[aiohttp.ClientWebSocketResponse] = None
         self.session: Optional[aiohttp.ClientSession] = None
         self.on_message: Optional[Callable] = None
@@ -75,16 +77,14 @@ class VolcengineASTClient:
             # 生成连接 ID（根据官方示例）
             self.conn_id = str(uuid.uuid4())
 
+            # 鉴权：新版控制台只需 X-Api-Key + X-Api-Resource-Id
             headers = {
-                "X-Api-App-Key": self.app_id,
-                "X-Api-Access-Key": self.access_key,
+                "X-Api-Key": self.api_key,
                 "X-Api-Resource-Id": self.resource_id,
-                "X-Api-Connect-Id": self.conn_id,  # 添加连接 ID
             }
 
             # 记录连接信息（不记录敏感信息）
             logger.info(f"正在连接到火山引擎 API: {self.AST_WS_URL}")
-            logger.debug(f"使用 App ID: {self.app_id[:8]}...")
             logger.debug(f"使用 Resource ID: {self.resource_id}")
             logger.debug(f"连接 ID: {self.conn_id}")
 
@@ -98,6 +98,10 @@ class VolcengineASTClient:
                 headers=headers,
                 max_msg_size=1000000000  # 1GB
             )
+            # 记录服务端返回的 logid，便于定位问题
+            logid = self.websocket.headers.get("X-Tt-Logid")
+            if logid:
+                logger.info(f"服务端 logid: {logid}")
             self.connected = True
             logger.info("已连接到火山引擎 API")
 
@@ -113,7 +117,7 @@ class VolcengineASTClient:
                 logger.error("2. 服务未开通或权限不足")
                 logger.error("3. Resource ID 不正确")
                 logger.error(f"   当前 Resource ID: {self.resource_id}")
-                logger.error(f"   当前 App ID: {self.app_id}")
+                logger.error(f"   当前 API Key: {self.api_key[:8]}...")
             else:
                 logger.error(f"连接失败: {e}")
                 logger.error(f"错误类型: {type(e).__name__}")
@@ -268,14 +272,23 @@ class VolcengineASTClient:
             request.request.target_language = self.target_lang
             
             # TTS 音色配置
-            # 注意：在S2S模式下，如果speaker_id留空，系统会自动从输入音频中提取说话人音色特征
-            # 实现"0样本声音复刻"，输出时会使用相同的音色进行目标语言语音合成
-            # 如果指定了speaker_id，则使用指定的音色（会覆盖自动复刻功能）
+            # 注意：S2S 模式下，不传 speaker_id 或传入不支持的值时，
+            # 会自动复刻输入音频的说话人音色（默认行为）。
+            # 当前支持的公版音色：
+            #   zh_female_vv_uranus_bigtts
+            #   zh_male_jingqiangkanye_emo_mars_bigtts
             if self.tts_speaker_id:
                 request.request.speaker_id = self.tts_speaker_id
-                logger.info(f"使用指定 TTS 音色: {self.tts_speaker_id}（将覆盖自动声音复刻）")
+                logger.info(f"使用指定 TTS 音色: {self.tts_speaker_id}")
             else:
                 logger.info("使用自动声音复刻模式（S2S模式会自动从输入音频中提取说话人音色特征）")
+
+            # 语速：[-50, 100]，100 为 2.0 倍速，-50 为 0.5 倍速，0 为正常
+            # 注意：当前 python_protogen 生成的 ReqParams 尚无 speech_rate 字段，
+            # 需要用最新 proto 重新生成后该配置才会生效
+            if self.speech_rate and hasattr(request.request, 'speech_rate'):
+                request.request.speech_rate = self.speech_rate
+                logger.info(f"设置 TTS 语速: {self.speech_rate}")
             
             # 发送 protobuf 序列化的消息
             await self.websocket.send_bytes(request.SerializeToString())

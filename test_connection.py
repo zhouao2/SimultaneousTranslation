@@ -30,17 +30,15 @@ async def test_connection():
     print("=" * 50)
     print("测试火山引擎 API 连接")
     print("=" * 50)
-    print(f"App ID: {volc_config['app_id']}")
-    print(f"Access Key: {volc_config['access_key'][:8]}...")
-    print(f"Resource ID: {volc_config['resource_id']}")
+    print(f"API Key: {volc_config['api_key'][:8]}...")
+    print(f"Resource ID: {volc_config.get('resource_id', 'volc.service_type.10053')}")
     print(f"源语言: {translation_config.get('source_language', 'zh')}")
     print(f"目标语言: {translation_config.get('target_language', 'en')}")
     print("=" * 50)
-    
+
     client = VolcengineASTClient(
-        app_id=volc_config["app_id"],
-        access_key=volc_config["access_key"],
-        resource_id=volc_config["resource_id"],
+        api_key=volc_config["api_key"],
+        resource_id=volc_config.get("resource_id", "volc.service_type.10053"),
         source_lang=translation_config.get("source_language", "zh"),
         target_lang=translation_config.get("target_language", "en")
     )

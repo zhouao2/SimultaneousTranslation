@@ -1,7 +1,6 @@
 {
   "volcengine": {
-    "app_id": "your-app-id",
-    "access_key": "your-access-key",
+    "api_key": "your-api-key",
     "resource_id": "volc.service_type.10053"
   },
   "server": {
@@ -21,7 +20,7 @@
   },
   "tts": {
     "speaker_id": "",
-    "comment": "speaker_id: 指定固定的 TTS 音色 ID。常用音色：zh_female_shuangkuaisisi（轻快女声双快）、zh_male_zhongyinshuni（稳重男声中音）、h_female_vv_uranus_bigtts（温柔女声Uranus）、en_female_amy（英文女声）等。使用固定音色可确保每次翻译音色一致。"
+    "speech_rate": 0,
+    "comment": "speaker_id: 留空使用自动声音复刻（推荐）。指定公版音色仅支持：zh_female_vv_uranus_bigtts、zh_male_jingqiangkanye_emo_mars_bigtts。speech_rate: [-50, 100]，100 为 2.0 倍速，-50 为 0.5 倍速，0 为正常（需更新 proto 后生效）。"
   }
 }
-

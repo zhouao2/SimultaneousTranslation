@@ -237,12 +237,12 @@ class TranslationServer:
         tts_config = self.config.get("tts", {})
         
         self.volcengine_client = VolcengineASTClient(
-            app_id=volc_config["app_id"],
-            access_key=volc_config["access_key"],
-            resource_id=volc_config["resource_id"],
+            api_key=volc_config["api_key"],
+            resource_id=volc_config.get("resource_id", "volc.service_type.10053"),
             source_lang=translation_config.get("source_language", "zh"),
             target_lang=translation_config.get("target_language", "en"),
-            tts_speaker_id=tts_config.get("speaker_id", "")
+            tts_speaker_id=tts_config.get("speaker_id", ""),
+            speech_rate=tts_config.get("speech_rate", 0)
         )
         
         # 设置消息回调
