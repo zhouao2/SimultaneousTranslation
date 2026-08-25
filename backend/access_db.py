@@ -1,0 +1,310 @@
+"""
+访问控制数据层：申请、访问码、会话、用量计量、审计日志（SQLite）
+"""
+import os
+import sqlite3
+import secrets
+import string
+import threading
+from datetime import datetime, timedelta
+from typing import Optional
+
+# 访问码字符集：去掉易混淆字符 0/O/1/I/L
+CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
+CODE_LENGTH = 8
+
+
+def now_iso() -> str:
+    return datetime.now().isoformat(timespec="seconds")
+
+
+class AccessDB:
+    """访问控制数据库（SQLite 单文件，WAL 模式）"""
+
+    def __init__(self, db_path: str):
+        self.db_path = db_path
+        os.makedirs(os.path.dirname(db_path), exist_ok=True)
+        self._lock = threading.Lock()
+        self._conn = sqlite3.connect(db_path, check_same_thread=False)
+        self._conn.row_factory = sqlite3.Row
+        self._conn.execute("PRAGMA journal_mode=WAL")
+        self._create_tables()
+
+    def _create_tables(self):
+        with self._lock, self._conn:
+            self._conn.executescript("""
+            CREATE TABLE IF NOT EXISTS requests (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                applicant TEXT NOT NULL,
+                email TEXT NOT NULL,
+                department TEXT DEFAULT '',
+                topic TEXT DEFAULT '',
+                planned_start TEXT NOT NULL,
+                planned_duration_min INTEGER NOT NULL,
+                status TEXT NOT NULL DEFAULT 'pending',
+                created_at TEXT NOT NULL,
+                reviewed_at TEXT,
+                reviewed_by TEXT,
+                reject_reason TEXT,
+                code_id INTEGER
+            );
+            CREATE TABLE IF NOT EXISTS codes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                code TEXT NOT NULL UNIQUE,
+                request_id INTEGER,
+                applicant TEXT NOT NULL,
+                email TEXT NOT NULL,
+                department TEXT DEFAULT '',
+                topic TEXT DEFAULT '',
+                valid_from TEXT NOT NULL,
+                valid_until TEXT,
+                quota_min INTEGER NOT NULL,
+                used_sec REAL NOT NULL DEFAULT 0,
+                status TEXT NOT NULL DEFAULT 'active',
+                email_status TEXT DEFAULT '',
+                created_at TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS sessions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                code_id INTEGER NOT NULL,
+                started_at TEXT NOT NULL,
+                ended_at TEXT,
+                wall_sec REAL NOT NULL DEFAULT 0,
+                duration_msec INTEGER NOT NULL DEFAULT 0,
+                input_audio_tokens REAL NOT NULL DEFAULT 0,
+                output_audio_tokens REAL NOT NULL DEFAULT 0,
+                output_text_tokens REAL NOT NULL DEFAULT 0
+            );
+            CREATE TABLE IF NOT EXISTS usage_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                session_id INTEGER NOT NULL,
+                code_id INTEGER NOT NULL,
+                ts TEXT NOT NULL,
+                duration_msec INTEGER DEFAULT 0,
+                input_audio_tokens REAL DEFAULT 0,
+                output_audio_tokens REAL DEFAULT 0,
+                output_text_tokens REAL DEFAULT 0
+            );
+            CREATE TABLE IF NOT EXISTS audit_log (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                ts TEXT NOT NULL,
+                actor TEXT DEFAULT '',
+                action TEXT NOT NULL,
+                detail TEXT DEFAULT ''
+            );
+            CREATE INDEX IF NOT EXISTS idx_sessions_code ON sessions(code_id);
+            CREATE INDEX IF NOT EXISTS idx_usage_code ON usage_events(code_id);
+            """)
+
+    # ---------- 审计 ----------
+
+    def audit(self, actor: str, action: str, detail: str = ""):
+        with self._lock, self._conn:
+            self._conn.execute(
+                "INSERT INTO audit_log (ts, actor, action, detail) VALUES (?, ?, ?, ?)",
+                (now_iso(), actor, action, detail))
+
+    # ---------- 申请 ----------
+
+    def create_request(self, applicant: str, email: str, department: str, topic: str,
+                       planned_start: str, planned_duration_min: int) -> int:
+        with self._lock, self._conn:
+            cur = self._conn.execute(
+                """INSERT INTO requests (applicant, email, department, topic,
+                   planned_start, planned_duration_min, status, created_at)
+                   VALUES (?, ?, ?, ?, ?, ?, 'pending', ?)""",
+                (applicant, email, department, topic,
+                 planned_start, planned_duration_min, now_iso()))
+            return cur.lastrowid
+
+    def get_request(self, request_id: int) -> Optional[sqlite3.Row]:
+        return self._conn.execute(
+            "SELECT * FROM requests WHERE id = ?", (request_id,)).fetchone()
+
+    def list_requests(self, status: Optional[str] = None) -> list:
+        if status:
+            return self._conn.execute(
+                "SELECT * FROM requests WHERE status = ? ORDER BY id DESC", (status,)).fetchall()
+        return self._conn.execute(
+            "SELECT * FROM requests ORDER BY id DESC").fetchall()
+
+    def has_pending_request_from(self, email: str) -> bool:
+        row = self._conn.execute(
+            "SELECT COUNT(*) AS c FROM requests WHERE email = ? AND status = 'pending'",
+            (email,)).fetchone()
+        return row["c"] > 0
+
+    # ---------- 访问码 ----------
+
+    def _generate_code(self) -> str:
+        while True:
+            code = "".join(secrets.choice(CODE_ALPHABET) for _ in range(CODE_LENGTH))
+            if not self._conn.execute(
+                    "SELECT 1 FROM codes WHERE code = ?", (code,)).fetchone():
+                return code
+
+    def approve_request(self, request_id: int, reviewed_by: str,
+                        valid_before_start_min: int = 120) -> Optional[sqlite3.Row]:
+        """审批通过：生成访问码。有效时间窗 = 计划开始时间提前 N 分钟生效，结束不限制。"""
+        with self._lock, self._conn:
+            req = self._conn.execute(
+                "SELECT * FROM requests WHERE id = ?", (request_id,)).fetchone()
+            if not req or req["status"] != "pending":
+                return None
+            valid_from = (datetime.fromisoformat(req["planned_start"])
+                          - timedelta(minutes=valid_before_start_min)).isoformat(timespec="seconds")
+            code = self._generate_code()
+            cur = self._conn.execute(
+                """INSERT INTO codes (code, request_id, applicant, email, department, topic,
+                   valid_from, valid_until, quota_min, status, created_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, 'active', ?)""",
+                (code, request_id, req["applicant"], req["email"], req["department"],
+                 req["topic"], valid_from, req["planned_duration_min"], now_iso()))
+            code_id = cur.lastrowid
+            self._conn.execute(
+                "UPDATE requests SET status = 'approved', reviewed_at = ?, reviewed_by = ?, code_id = ? WHERE id = ?",
+                (now_iso(), reviewed_by, code_id, request_id))
+            return self._conn.execute(
+                "SELECT * FROM codes WHERE id = ?", (code_id,)).fetchone()
+
+    def reject_request(self, request_id: int, reviewed_by: str, reason: str = ""):
+        with self._lock, self._conn:
+            self._conn.execute(
+                "UPDATE requests SET status = 'rejected', reviewed_at = ?, reviewed_by = ?, reject_reason = ? WHERE id = ? AND status = 'pending'",
+                (now_iso(), reviewed_by, reason, request_id))
+
+    def get_code_by_value(self, code: str) -> Optional[sqlite3.Row]:
+        return self._conn.execute(
+            "SELECT * FROM codes WHERE code = ?", (code,)).fetchone()
+
+    def get_code(self, code_id: int) -> Optional[sqlite3.Row]:
+        return self._conn.execute(
+            "SELECT * FROM codes WHERE id = ?", (code_id,)).fetchone()
+
+    def check_code_validity(self, code_row) -> tuple:
+        """返回 (是否有效, 原因)。规则：active 且当前时间 >= valid_from（结束不限制）。"""
+        if code_row["status"] == "revoked":
+            return False, "访问码已被撤销"
+        if code_row["status"] == "exhausted":
+            return False, "访问码时长额度已用尽"
+        now = datetime.now()
+        valid_from = datetime.fromisoformat(code_row["valid_from"])
+        if now < valid_from:
+            return False, f"访问码尚未生效（{valid_from.strftime('%m-%d %H:%M')} 起可用）"
+        if code_row["valid_until"]:
+            if now > datetime.fromisoformat(code_row["valid_until"]):
+                return False, "访问码已过期"
+        return True, ""
+
+    def set_code_status(self, code_id: int, status: str):
+        with self._lock, self._conn:
+            self._conn.execute("UPDATE codes SET status = ? WHERE id = ?", (status, code_id))
+
+    def set_code_email_status(self, code_id: int, status: str):
+        with self._lock, self._conn:
+            self._conn.execute("UPDATE codes SET email_status = ? WHERE id = ?", (status, code_id))
+
+    def add_code_quota(self, code_id: int, add_min: int):
+        with self._lock, self._conn:
+            self._conn.execute(
+                "UPDATE codes SET quota_min = quota_min + ?, "
+                "status = CASE WHEN status = 'exhausted' THEN 'active' ELSE status END "
+                "WHERE id = ?",
+                (add_min, code_id))
+
+    def list_codes(self) -> list:
+        return self._conn.execute("SELECT * FROM codes ORDER BY id DESC").fetchall()
+
+    # ---------- 会话与用量 ----------
+
+    def start_session(self, code_id: int) -> int:
+        with self._lock, self._conn:
+            cur = self._conn.execute(
+                "INSERT INTO sessions (code_id, started_at) VALUES (?, ?)",
+                (code_id, now_iso()))
+            return cur.lastrowid
+
+    def end_session(self, session_id: int):
+        with self._lock, self._conn:
+            self.tick_session(session_id, _locked=True)
+            self._conn.execute(
+                "UPDATE sessions SET ended_at = ? WHERE id = ?", (now_iso(), session_id))
+
+    def tick_session(self, session_id: int, _locked: bool = False):
+        """按墙钟更新会话时长，并同步刷新访问码累计用量（= 该码所有会话时长之和）"""
+        def _do():
+            self._conn.execute(
+                """UPDATE sessions SET wall_sec =
+                   (julianday('now', 'localtime') - julianday(started_at)) * 86400.0
+                   WHERE id = ? AND ended_at IS NULL""", (session_id,))
+            self._conn.execute(
+                """UPDATE codes SET used_sec = (
+                       SELECT COALESCE(SUM(wall_sec), 0) FROM sessions WHERE code_id = codes.id
+                   ) WHERE id = (SELECT code_id FROM sessions WHERE id = ?)""", (session_id,))
+        if _locked:
+            _do()
+        else:
+            with self._lock, self._conn:
+                _do()
+
+    def get_code_usage(self, code_id: int) -> dict:
+        row = self._conn.execute(
+            "SELECT quota_min, used_sec, status FROM codes WHERE id = ?", (code_id,)).fetchone()
+        if not row:
+            return {"quota_min": 0, "used_sec": 0, "status": "unknown"}
+        return {"quota_min": row["quota_min"], "used_sec": row["used_sec"], "status": row["status"]}
+
+    def record_usage(self, session_id: int, code_id: int, duration_msec: int,
+                     input_audio_tokens: float, output_audio_tokens: float,
+                     output_text_tokens: float):
+        """记录一条 UsageResponse 计量，并累计到会话聚合"""
+        with self._lock, self._conn:
+            self._conn.execute(
+                """INSERT INTO usage_events (session_id, code_id, ts, duration_msec,
+                   input_audio_tokens, output_audio_tokens, output_text_tokens)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                (session_id, code_id, now_iso(), duration_msec,
+                 input_audio_tokens, output_audio_tokens, output_text_tokens))
+            self._conn.execute(
+                """UPDATE sessions SET duration_msec = duration_msec + ?,
+                   input_audio_tokens = input_audio_tokens + ?,
+                   output_audio_tokens = output_audio_tokens + ?,
+                   output_text_tokens = output_text_tokens + ?
+                   WHERE id = ?""",
+                (duration_msec, input_audio_tokens, output_audio_tokens,
+                 output_text_tokens, session_id))
+
+    # ---------- 报表 ----------
+
+    def usage_summary(self, days: int = 30) -> list:
+        """按访问码聚合用量（近 N 天有活动的码）"""
+        return self._conn.execute(
+            """SELECT c.id, c.code, c.applicant, c.department, c.topic, c.status,
+                      c.quota_min, c.used_sec,
+                      COALESCE(SUM(s.duration_msec), 0) AS duration_msec,
+                      COALESCE(SUM(s.input_audio_tokens), 0) AS input_audio_tokens,
+                      COALESCE(SUM(s.output_audio_tokens), 0) AS output_audio_tokens,
+                      COALESCE(SUM(s.output_text_tokens), 0) AS output_text_tokens,
+                      COUNT(s.id) AS session_count
+               FROM codes c LEFT JOIN sessions s ON s.code_id = c.id
+                    AND s.started_at >= datetime('now', 'localtime', ?)
+               GROUP BY c.id ORDER BY c.id DESC""",
+            (f'-{days} days',)).fetchall()
+
+    def daily_usage(self, days: int = 30) -> list:
+        """按天聚合全部用量"""
+        return self._conn.execute(
+            """SELECT date(started_at) AS day,
+                      COUNT(*) AS session_count,
+                      COALESCE(SUM(duration_msec), 0) AS duration_msec,
+                      COALESCE(SUM(input_audio_tokens), 0) AS input_audio_tokens,
+                      COALESCE(SUM(output_audio_tokens), 0) AS output_audio_tokens,
+                      COALESCE(SUM(output_text_tokens), 0) AS output_text_tokens
+               FROM sessions
+               WHERE started_at >= datetime('now', 'localtime', ?)
+               GROUP BY date(started_at) ORDER BY day DESC""",
+            (f'-{days} days',)).fetchall()
+
+    def close(self):
+        with self._lock:
+            self._conn.close()

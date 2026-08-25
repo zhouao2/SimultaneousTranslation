@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>同声传译系统 · 管理后台</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", sans-serif; background: #f2f3f7; color: #222; }
+        .login-wrap { min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+        .login-box { background: #fff; padding: 34px; border-radius: 14px; box-shadow: 0 10px 36px rgba(0,0,0,.12); width: 340px; }
+        .login-box h1 { font-size: 19px; margin-bottom: 6px; }
+        .login-box p { font-size: 13px; color: #888; margin-bottom: 18px; }
+        .login-box input { width: 100%; padding: 10px 12px; border: 1px solid #d5d5e0; border-radius: 8px; font-size: 14px; margin-bottom: 12px; outline: none; }
+        .login-box input:focus { border-color: #667eea; }
+        .btn { padding: 9px 16px; border: none; border-radius: 7px; cursor: pointer; font-size: 13.5px; font-weight: 600; background: #667eea; color: #fff; }
+        .btn:hover { background: #5a6fd8; }
+        .btn.sm { padding: 5px 10px; font-size: 12px; font-weight: 500; }
+        .btn.danger { background: #e74c3c; } .btn.danger:hover { background: #c0392b; }
+        .btn.ok { background: #2ecc71; } .btn.ok:hover { background: #27ae60; }
+        .btn.ghost { background: #eef; color: #5560c0; }
+        .hidden { display: none !important; }
+
+        .topbar { background: #24243e; color: #fff; padding: 14px 26px; display: flex; align-items: center; justify-content: space-between; }
+        .topbar h1 { font-size: 17px; font-weight: 600; }
+        .topbar .right { font-size: 13px; opacity: .8; }
+        .main { max-width: 1180px; margin: 22px auto; padding: 0 18px; }
+        .tabs { display: flex; gap: 8px; margin-bottom: 18px; }
+        .tab { padding: 8px 18px; border-radius: 8px 8px 0 0; cursor: pointer; font-size: 14px; background: #e2e3ec; color: #555; }
+        .tab.active { background: #fff; color: #24243e; font-weight: 600; box-shadow: 0 -2px 6px rgba(0,0,0,.05); }
+        .panel { background: #fff; border-radius: 0 10px 10px 10px; padding: 20px; box-shadow: 0 4px 18px rgba(0,0,0,.06); }
+        table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid #eee; vertical-align: top; }
+        th { color: #666; font-weight: 600; background: #fafafc; white-space: nowrap; }
+        tr:hover td { background: #fafbff; }
+        .tag { display: inline-block; padding: 2px 9px; border-radius: 20px; font-size: 11.5px; font-weight: 500; }
+        .tag.pending { background: #fef5e7; color: #b9770e; }
+        .tag.approved, .tag.active { background: #e8f8f0; color: #1e8e5a; }
+        .tag.rejected, .tag.revoked { background: #fdecea; color: #c0392b; }
+        .tag.exhausted { background: #f4ecf7; color: #8e44ad; }
+        .tag.sent { background: #e8f8f0; color: #1e8e5a; }
+        .tag.failed { background: #fdecea; color: #c0392b; }
+        .empty { text-align: center; color: #aaa; padding: 34px 0; font-size: 13.5px; }
+        .code-val { font-family: monospace; font-size: 14px; letter-spacing: 1px; font-weight: 600; }
+        .quota-bar { background: #eee; border-radius: 6px; height: 8px; width: 110px; overflow: hidden; }
+        .quota-fill { height: 100%; background: #2ecc71; border-radius: 6px; }
+        .quota-fill.warn { background: #f39c12; } .quota-fill.over { background: #e74c3c; }
+        .toolbar { display: flex; gap: 10px; align-items: center; margin-bottom: 14px; font-size: 13px; color: #666; flex-wrap: wrap; }
+        .toast { position: fixed; top: 18px; left: 50%; transform: translateX(-50%); background: #24243e; color: #fff; padding: 10px 20px; border-radius: 8px; font-size: 13.5px; z-index: 99; box-shadow: 0 6px 20px rgba(0,0,0,.25); }
+        .section-title { font-size: 14.5px; font-weight: 600; margin: 4px 0 12px; color: #24243e; }
+        .subtable { margin-bottom: 26px; }
+    </style>
+</head>
+<body>
+
+<!-- 登录 -->
+<div class="login-wrap" id="loginWrap">
+    <div class="login-box">
+        <h1>管理后台</h1>
+        <p>同声传译系统 · 管理员登录</p>
+        <input type="password" id="adminPwd" placeholder="管理员密码" autocomplete="current-password">
+        <button class="btn" style="width:100%" onclick="adminLogin()">登 录</button>
+        <div id="loginErr" style="color:#c0392b;font-size:12.5px;margin-top:10px;min-height:16px;"></div>
+    </div>
+</div>
+
+<!-- 主界面 -->
+<div id="adminApp" class="hidden">
+    <div class="topbar">
+        <h1>同声传译 · 管理后台</h1>
+        <div class="right"><a href="/" style="color:#fff;">返回首页</a></div>
+    </div>
+    <div class="main">
+        <div class="tabs">
+            <div class="tab active" data-tab="requests" onclick="switchTab('requests')">使用申请</div>
+            <div class="tab" data-tab="codes" onclick="switchTab('codes')">访问码</div>
+            <div class="tab" data-tab="usage" onclick="switchTab('usage')">用量与成本</div>
+            <div class="tab" data-tab="audit" onclick="switchTab('audit')">审计日志</div>
+        </div>
+
+        <!-- 申请 -->
+        <div class="panel" id="panel-requests">
+            <div class="section-title">待审批申请</div>
+            <div id="pendingTable"></div>
+            <div class="section-title" style="margin-top:24px;">已处理申请</div>
+            <div id="historyTable"></div>
+        </div>
+
+        <!-- 访问码 -->
+        <div class="panel" id="panel-codes">
+            <div class="toolbar">
+                <button class="btn sm ghost" onclick="loadCodes()">刷新</button>
+                <span>撤销后立即失效；追加额度可恢复已用尽的码</span>
+            </div>
+            <div id="codesTable"></div>
+        </div>
+
+        <!-- 用量 -->
+        <div class="panel" id="panel-usage">
+            <div class="toolbar">
+                统计范围：
+                <select id="usageDays" onchange="loadUsage()">
+                    <option value="7">近 7 天</option>
+                    <option value="30" selected>近 30 天</option>
+                    <option value="90">近 90 天</option>
+                </select>
+                <span id="pricingInfo"></span>
+            </div>
+            <div class="subtable">
+                <div class="section-title">按访问码</div>
+                <div id="usageByCode"></div>
+            </div>
+            <div class="subtable">
+                <div class="section-title">按天汇总</div>
+                <div id="usageByDay"></div>
+            </div>
+        </div>
+
+        <!-- 审计 -->
+        <div class="panel" id="panel-audit">
+            <div id="auditTable"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+let TAB = 'requests';
+
+async function api(path, opts) {
+    const resp = await fetch(path, opts);
+    if (resp.status === 401 && !path.includes('login')) {
+        document.getElementById('loginWrap').classList.remove('hidden');
+        document.getElementById('adminApp').classList.add('hidden');
+        throw new Error('未登录');
+    }
+    let data = {};
+    try { data = await resp.json(); } catch (e) {}
+    if (!resp.ok) throw new Error(data.error || `HTTP ${resp.status}`);
+    return data;
+}
+async function post(path, body) {
+    return api(path, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body || {})});
+}
+
+function esc(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function toast(text, ok = true) {
+    const t = document.createElement('div');
+    t.className = 'toast';
+    t.style.background = ok ? '#24243e' : '#c0392b';
+    t.textContent = text;
+    document.body.appendChild(t);
+    setTimeout(() => t.remove(), 2600);
+}
+function fmtMin(sec) { return (sec / 60).toFixed(0) + ' 分钟'; }
+function fmtDT(s) { return s ? String(s).replace('T', ' ').slice(0, 16) : '-'; }
+
+// ---------- 登录 ----------
+async function adminLogin() {
+    const pwd = document.getElementById('adminPwd').value;
+    try {
+        await post('/api/admin/login', {password: pwd});
+        enterAdmin();
+    } catch (e) {
+        document.getElementById('loginErr').textContent = e.message;
+    }
+}
+document.getElementById('adminPwd').addEventListener('keydown', e => { if (e.key === 'Enter') adminLogin(); });
+
+async function enterAdmin() {
+    document.getElementById('loginWrap').classList.add('hidden');
+    document.getElementById('adminApp').classList.remove('hidden');
+    await refreshAll();
+}
+
+// ---------- Tab ----------
+function switchTab(tab) {
+    TAB = tab;
+    document.querySelectorAll('.tab').forEach(el => el.classList.toggle('active', el.dataset.tab === tab));
+    document.querySelectorAll('.panel').forEach(el => el.classList.add('hidden'));
+    document.getElementById('panel-' + tab).classList.remove('hidden');
+    refreshAll();
+}
+async function refreshAll() {
+    if (TAB === 'requests') await loadRequests();
+    else if (TAB === 'codes') await loadCodes();
+    else if (TAB === 'usage') await loadUsage();
+    else if (TAB === 'audit') await loadAudit();
+}
+
+// ---------- 申请 ----------
+async function loadRequests() {
+    const data = await api('/api/admin/requests');
+    const pending = data.requests.filter(r => r.status === 'pending');
+    const done = data.requests.filter(r => r.status !== 'pending');
+
+    const pHtml = pending.length ? `<table><tr><th>ID</th><th>申请人</th><th>部门</th><th>主题</th><th>使用时间</th><th>时长</th><th>申请时间</th><th>操作</th></tr>
+        ${pending.map(r => `<tr>
+            <td>${r.id}</td><td>${esc(r.applicant)}<br><span style="color:#999;font-size:12px;">${esc(r.email)}</span></td>
+            <td>${esc(r.department) || '-'}</td><td>${esc(r.topic) || '-'}</td>
+            <td>${fmtDT(r.planned_start)}</td><td>${r.planned_duration_min} 分钟</td>
+            <td>${fmtDT(r.created_at)}</td>
+            <td style="white-space:nowrap;">
+                <button class="btn sm ok" onclick="approve(${r.id})">通过</button>
+                <button class="btn sm danger" onclick="reject(${r.id})">拒绝</button>
+            </td></tr>`).join('')}</table>`
+        : '<div class="empty">暂无待审批申请</div>';
+    document.getElementById('pendingTable').innerHTML = pHtml;
+
+    const statusTag = {approved: '已通过', rejected: '已拒绝'};
+    const dHtml = done.length ? `<table><tr><th>ID</th><th>申请人</th><th>主题</th><th>使用时间</th><th>状态</th><th>处理时间</th><th>备注</th></tr>
+        ${done.slice(0, 30).map(r => `<tr>
+            <td>${r.id}</td><td>${esc(r.applicant)}</td><td>${esc(r.topic) || '-'}</td>
+            <td>${fmtDT(r.planned_start)}</td>
+            <td><span class="tag ${r.status}">${statusTag[r.status] || r.status}</span></td>
+            <td>${fmtDT(r.reviewed_at)}</td><td>${esc(r.reject_reason) || ''}</td></tr>`).join('')}</table>`
+        : '<div class="empty">暂无历史申请</div>';
+    document.getElementById('historyTable').innerHTML = dHtml;
+}
+
+async function approve(id) {
+    if (!confirm(`通过申请 #${id}？将自动生成访问码并邮件通知申请人。`)) return;
+    try {
+        const r = await post('/api/admin/approve', {request_id: id});
+        toast(r.message + (r.code ? `（访问码: ${r.code}）` : ''));
+        await loadRequests();
+    } catch (e) { toast(e.message, false); }
+}
+async function reject(id) {
+    const reason = prompt('拒绝原因（可留空）：') ?? '';
+    try {
+        await post('/api/admin/reject', {request_id: id, reason});
+        toast('已拒绝');
+        await loadRequests();
+    } catch (e) { toast(e.message, false); }
+}
+
+// ---------- 访问码 ----------
+async function loadCodes() {
+    const data = await api('/api/admin/codes');
+    const html = data.codes.length ? `<table><tr><th>访问码</th><th>申请人</th><th>主题</th><th>状态</th><th>额度使用</th><th>生效时间</th><th>邮件</th><th>操作</th></tr>
+        ${data.codes.map(c => {
+            const pct = c.quota_min ? Math.min(100, c.used_sec / 60 / c.quota_min * 100) : 0;
+            const cls = pct >= 100 ? 'over' : pct >= 80 ? 'warn' : '';
+            return `<tr>
+            <td class="code-val">${esc(c.code)}</td>
+            <td>${esc(c.applicant)}<br><span style="color:#999;font-size:12px;">${esc(c.email)}</span></td>
+            <td>${esc(c.topic) || '-'}</td>
+            <td><span class="tag ${c.status}">${{active:'有效', revoked:'已撤销', exhausted:'已用尽'}[c.status] || c.status}</span></td>
+            <td>
+                <div style="display:flex;align-items:center;gap:8px;">
+                    <div class="quota-bar"><div class="quota-fill ${cls}" style="width:${pct}%"></div></div>
+                    <span>${fmtMin(c.used_sec)} / ${c.quota_min} 分钟</span>
+                </div>
+            </td>
+            <td>${fmtDT(c.valid_from)} 起</td>
+            <td>${c.email_status ? `<span class="tag ${c.email_status}">${{sent:'已发送',failed:'失败'}[c.email_status] || c.email_status}</span>` : '-'}</td>
+            <td style="white-space:nowrap;">
+                ${c.status === 'active' ? `<button class="btn sm danger" onclick="revokeCode(${c.id})">撤销</button>` : ''}
+                <button class="btn sm ghost" onclick="addQuota(${c.id})">追加额度</button>
+                <button class="btn sm ghost" onclick="resend(${c.id})">重发邮件</button>
+            </td></tr>`;
+        }).join('')}</table>`
+        : '<div class="empty">暂无访问码</div>';
+    document.getElementById('codesTable').innerHTML = html;
+}
+async function revokeCode(id) {
+    if (!confirm('撤销后该访问码立即失效，确定？')) return;
+    try { await post('/api/admin/revoke', {code_id: id}); toast('已撤销'); await loadCodes(); }
+    catch (e) { toast(e.message, false); }
+}
+async function addQuota(id) {
+    const v = prompt('追加额度（分钟）：', '60');
+    if (!v) return;
+    try { await post('/api/admin/quota', {code_id: id, add_min: parseInt(v, 10)}); toast('已追加'); await loadCodes(); }
+    catch (e) { toast(e.message, false); }
+}
+async function resend(id) {
+    try { const r = await post('/api/admin/resend', {code_id: id}); toast(r.email_sent ? '邮件已发送' : '发送失败，请检查 SMTP 配置', r.email_sent); }
+    catch (e) { toast(e.message, false); }
+}
+
+// ---------- 用量 ----------
+async function loadUsage() {
+    const days = document.getElementById('usageDays').value;
+    const data = await api('/api/admin/usage?days=' + days);
+    const p = data.pricing || {};
+    const configured = (p.input_audio_per_ktoken || p.output_audio_per_ktoken || p.output_text_per_ktoken);
+    document.getElementById('pricingInfo').textContent = configured
+        ? `单价（每千 token，${data.currency}）：输入音频 ${p.input_audio_per_ktoken} / 输出音频 ${p.output_audio_per_ktoken} / 输出文本 ${p.output_text_per_ktoken}`
+        : '未配置 token 单价（config.json pricing 节），成本列显示为 0';
+
+    const byCode = data.by_code.filter(r => r.session_count > 0 || r.used_sec > 0);
+    document.getElementById('usageByCode').innerHTML = byCode.length ? `<table>
+        <tr><th>访问码</th><th>申请人</th><th>会话数</th><th>使用时长</th><th>音频时长</th><th>输入音频 token</th><th>输出音频 token</th><th>输出文本 token</th><th>成本(${data.currency})</th></tr>
+        ${byCode.map(r => `<tr>
+            <td class="code-val">${esc(r.code)}</td><td>${esc(r.applicant)}</td>
+            <td>${r.session_count}</td><td>${fmtMin(r.used_sec)}</td>
+            <td>${(r.duration_msec / 1000 / 60).toFixed(1)} 分钟</td>
+            <td>${(+r.input_audio_tokens).toFixed(0)}</td><td>${(+r.output_audio_tokens).toFixed(0)}</td><td>${(+r.output_text_tokens).toFixed(0)}</td>
+            <td>${r.cost.toFixed(2)}</td></tr>`).join('')}</table>`
+        : '<div class="empty">所选时间范围内暂无用量</div>';
+
+    document.getElementById('usageByDay').innerHTML = data.by_day.length ? `<table>
+        <tr><th>日期</th><th>会话数</th><th>音频时长</th><th>输入音频 token</th><th>输出音频 token</th><th>输出文本 token</th><th>成本(${data.currency})</th></tr>
+        ${data.by_day.map(r => `<tr>
+            <td>${r.day}</td><td>${r.session_count}</td>
+            <td>${(r.duration_msec / 1000 / 60).toFixed(1)} 分钟</td>
+            <td>${(+r.input_audio_tokens).toFixed(0)}</td><td>${(+r.output_audio_tokens).toFixed(0)}</td><td>${(+r.output_text_tokens).toFixed(0)}</td>
+            <td>${r.cost.toFixed(2)}</td></tr>`).join('')}</table>`
+        : '<div class="empty">暂无数据</div>';
+}
+
+// ---------- 审计 ----------
+async function loadAudit() {
+    const data = await api('/api/admin/audit');
+    const nameMap = {
+        request_submitted: '提交申请', request_approved: '审批通过', request_rejected: '审批拒绝',
+        code_revoked: '撤销访问码', code_quota_added: '追加额度', quota_exceeded: '额度用尽',
+        session_start: '会话开始', session_end: '会话结束',
+        admin_login: '管理员登录', admin_login_failed: '管理员登录失败',
+    };
+    document.getElementById('auditTable').innerHTML = data.logs.length ? `<table>
+        <tr><th>时间</th><th>操作者</th><th>事件</th><th>详情</th></tr>
+        ${data.logs.map(l => `<tr>
+            <td>${fmtDT(l.ts)}</td><td>${esc(l.actor)}</td>
+            <td>${nameMap[l.action] || l.action}</td><td>${esc(l.detail)}</td></tr>`).join('')}</table>`
+        : '<div class="empty">暂无日志</div>';
+}
+
+// ---------- 初始化：探测登录态 ----------
+(async function () {
+    try {
+        await api('/api/admin/codes');
+        enterAdmin();
+    } catch (e) { /* 未登录，显示登录框 */ }
+})();
+</script>
+</body>
+</html>

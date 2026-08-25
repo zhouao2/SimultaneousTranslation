@@ -50,3 +50,6 @@ config/corrections.json
 config/*.bak
 config/* copy.*
 config/config.json
+
+# 访问控制数据库（申请、访问码、用量）
+data/

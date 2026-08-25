@@ -5,8 +5,30 @@
   },
   "server": {
     "host": "0.0.0.0",
-    "port": 8765,
+    "port": 15677,
     "advertise_ip": ""
+  },
+  "security": {
+    "secret_key": "change-me-to-a-long-random-string",
+    "admin_password": "change-me",
+    "code_valid_before_start_min": 120,
+    "quota_warn_ratio": 0.8,
+    "quota_overshoot_ratio": 1.2
+  },
+  "smtp": {
+    "enabled": false,
+    "host": "smtp.example.com",
+    "port": 465,
+    "username": "",
+    "password": "",
+    "use_tls": true,
+    "from_addr": "noreply@example.com"
+  },
+  "pricing": {
+    "currency": "CNY",
+    "input_audio_per_ktoken": 0,
+    "output_audio_per_ktoken": 0,
+    "output_text_per_ktoken": 0
   },
   "audio": {
     "sample_rate": 16000,

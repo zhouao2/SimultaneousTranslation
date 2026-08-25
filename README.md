@@ -270,6 +270,28 @@ Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
 - 学生通过查看端查看翻译结果
 - 支持大屏幕投影显示
 
+## 访问控制与用量统计（内部上线）
+
+系统内置基于**访问码**的权限控制和用量/成本统计：
+
+- `/` 首页：提交使用申请（申请人、邮箱、部门、主题、使用时间、预计时长），或输入访问码进入系统
+- `/app` 控制端、`/viewer` 查看端：需要访问码登录态（cookie），未登录自动跳回首页
+- `/admin` 管理后台：管理员密码登录（`security.admin_password`），审批申请、管理访问码、查看用量与成本
+
+**流程**：用户提交申请 → 管理员在后台审批 → 系统自动生成访问码并通过邮件发送（SMTP 未配置时可在管理页复制手动发送）→ 用户输入访问码进入。
+
+**访问码规则**：
+- 自计划使用时间**提前 2 小时**生效（`security.code_valid_before_start_min` 可调），结束时间不限制
+- 时长额度 = 申请的预计时长；用到 80% 前端提醒，用到额度 × 1.2 自动断开（`quota_warn_ratio` / `quota_overshoot_ratio` 可调）
+- 管理员可随时撤销、追加额度、重发邮件
+
+**用量统计**：每次翻译会话按墙钟累计时长，火山引擎的 UsageResponse（token 消耗）逐条落库（`data/access.db`，SQLite），管理后台按访问码/按天查看 token 用量与成本（在 `pricing` 节配置每千 token 单价后自动换算金额）。
+
+上线前需要在 `config/config.json` 中配置：
+- `security.secret_key`：随机长字符串（签名登录态 cookie 用）
+- `security.admin_password`：管理后台密码
+- `smtp.*`：邮件服务器（可选，未配置时审批通过后到管理页复制访问码）
+
 ## 项目结构
 
 ```

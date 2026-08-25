@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>同声传译系统</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px;
+        }
+        .container { width: 100%; max-width: 880px; }
+        .header { text-align: center; color: #fff; margin-bottom: 28px; }
+        .header h1 { font-size: 26px; font-weight: 600; letter-spacing: 2px; }
+        .header p { margin-top: 8px; opacity: .85; font-size: 14px; }
+        .cards { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        @media (max-width: 720px) { .cards { grid-template-columns: 1fr; } }
+        .card {
+            background: #fff; border-radius: 14px; padding: 28px;
+            box-shadow: 0 12px 40px rgba(0,0,0,.18);
+        }
+        .card h2 { font-size: 17px; color: #1a1a2e; margin-bottom: 6px; }
+        .card .sub { font-size: 13px; color: #888; margin-bottom: 18px; line-height: 1.5; }
+        .field { margin-bottom: 14px; }
+        .field label { display: block; font-size: 13px; color: #555; margin-bottom: 5px; }
+        .field label .req { color: #e74c3c; margin-left: 2px; }
+        .field input, .field select {
+            width: 100%; padding: 9px 12px; border: 1px solid #d5d5e0; border-radius: 8px;
+            font-size: 14px; outline: none; transition: border .15s;
+        }
+        .field input:focus, .field select:focus { border-color: #667eea; }
+        .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        .btn {
+            width: 100%; padding: 11px; border: none; border-radius: 8px; cursor: pointer;
+            font-size: 15px; font-weight: 600; color: #fff; background: #667eea;
+            transition: background .15s; margin-top: 6px;
+        }
+        .btn:hover { background: #5a6fd8; }
+        .btn:disabled { background: #b0b0c0; cursor: not-allowed; }
+        .btn.secondary { background: #2ecc71; }
+        .btn.secondary:hover { background: #27ae60; }
+        .msg { margin-top: 12px; font-size: 13px; border-radius: 8px; padding: 10px 12px; display: none; line-height: 1.5; }
+        .msg.ok { display: block; background: #e8f8f0; color: #1e8e5a; }
+        .msg.err { display: block; background: #fdecea; color: #c0392b; }
+        .code-input { text-transform: uppercase; letter-spacing: 3px; font-size: 18px !important; text-align: center; font-family: monospace; }
+        .footer { text-align: center; color: rgba(255,255,255,.75); font-size: 12px; margin-top: 22px; }
+        .footer a { color: #fff; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>同声传译实时翻译系统</h1>
+            <p>实时语音翻译 · 中英日西德多语种 · 语音播报</p>
+        </div>
+
+        <div class="cards">
+            <!-- 申请使用 -->
+            <div class="card">
+                <h2>申请使用</h2>
+                <div class="sub">提交申请后等待管理员审批，审批通过后访问码会发送到你的邮箱。</div>
+                <form id="requestForm">
+                    <div class="field">
+                        <label>申请人<span class="req">*</span></label>
+                        <input type="text" id="applicant" required maxlength="50" placeholder="姓名">
+                    </div>
+                    <div class="field">
+                        <label>邮箱<span class="req">*</span></label>
+                        <input type="email" id="email" required maxlength="100" placeholder="name@company.com">
+                    </div>
+                    <div class="field">
+                        <label>部门</label>
+                        <input type="text" id="department" maxlength="50" placeholder="所在部门">
+                    </div>
+                    <div class="field">
+                        <label>使用主题</label>
+                        <input type="text" id="topic" maxlength="100" placeholder="例如：季度会议同传">
+                    </div>
+                    <div class="row">
+                        <div class="field">
+                            <label>使用时间<span class="req">*</span></label>
+                            <input type="datetime-local" id="planned_start" required>
+                        </div>
+                        <div class="field">
+                            <label>预计时长<span class="req">*</span></label>
+                            <select id="planned_duration_min">
+                                <option value="30">30 分钟</option>
+                                <option value="60" selected>1 小时</option>
+                                <option value="90">1.5 小时</option>
+                                <option value="120">2 小时</option>
+                                <option value="180">3 小时</option>
+                                <option value="240">4 小时</option>
+                            </select>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn" id="submitBtn">提交申请</button>
+                    <div class="msg" id="requestMsg"></div>
+                </form>
+            </div>
+
+            <!-- 访问码进入 -->
+            <div class="card">
+                <h2>输入访问码</h2>
+                <div class="sub">已收到访问码？输入后即可进入控制端页面。<br>访问码自计划开始时间前 2 小时生效。</div>
+                <form id="verifyForm">
+                    <div class="field">
+                        <label>访问码</label>
+                        <input type="text" id="code" class="code-input" required maxlength="8"
+                               placeholder="XXXXXXXX" autocomplete="off">
+                    </div>
+                    <button type="submit" class="btn secondary" id="verifyBtn">进入控制端</button>
+                    <div class="msg" id="verifyMsg"></div>
+                </form>
+                <div style="margin-top:14px;font-size:13px;color:#888;">
+                    观众/投影请进入控制端后使用右上角"查看端"链接，或
+                    <a href="#" onclick="enterViewer();return false;" style="color:#667eea;">凭访问码进入查看端</a>。
+                </div>
+            </div>
+        </div>
+
+        <div class="footer">内部系统，请合理使用 · 管理员入口 <a href="/admin">/admin</a></div>
+    </div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+
+function showMsg(el, text, ok) {
+    el.textContent = text;
+    el.className = 'msg ' + (ok ? 'ok' : 'err');
+}
+
+async function postJSON(url, body) {
+    const resp = await fetch(url, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(body)
+    });
+    let data = {};
+    try { data = await resp.json(); } catch (e) {}
+    return {status: resp.status, ok: resp.ok && data.ok !== false, data};
+}
+
+$('requestForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = $('submitBtn');
+    btn.disabled = true; btn.textContent = '提交中...';
+    try {
+        const r = await postJSON('/api/request', {
+            applicant: $('applicant').value.trim(),
+            email: $('email').value.trim(),
+            department: $('department').value.trim(),
+            topic: $('topic').value.trim(),
+            planned_start: $('planned_start').value,
+            planned_duration_min: parseInt($('planned_duration_min').value, 10)
+        });
+        if (r.ok) {
+            showMsg($('requestMsg'), '✓ ' + (r.data.message || '申请已提交'), true);
+            e.target.reset();
+        } else {
+            showMsg($('requestMsg'), r.data.error || '提交失败，请稍后再试', false);
+        }
+    } catch (err) {
+        showMsg($('requestMsg'), '网络错误，请稍后再试', false);
+    } finally {
+        btn.disabled = false; btn.textContent = '提交申请';
+    }
+});
+
+async function verifyCode(target) {
+    const code = $('code').value.trim().toUpperCase();
+    if (!code) { showMsg($('verifyMsg'), '请输入访问码', false); return; }
+    const btn = $('verifyBtn');
+    btn.disabled = true; btn.textContent = '验证中...';
+    try {
+        const r = await postJSON('/api/verify', {code, target});
+        if (r.ok) {
+            window.location.href = r.data.redirect || '/app';
+        } else {
+            showMsg($('verifyMsg'), r.data.error || '访问码验证失败', false);
+            btn.disabled = false; btn.textContent = '进入控制端';
+        }
+    } catch (err) {
+        showMsg($('verifyMsg'), '网络错误，请稍后再试', false);
+        btn.disabled = false; btn.textContent = '进入控制端';
+    }
+}
+
+$('verifyForm').addEventListener('submit', (e) => { e.preventDefault(); verifyCode('app'); });
+function enterViewer() { verifyCode('viewer'); }
+
+// 默认使用时间填明天 9:00
+(function () {
+    const d = new Date(Date.now() + 24 * 3600 * 1000);
+    const pad = (n) => String(n).padStart(2, '0');
+    $('planned_start').value = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T09:00`;
+})();
+</script>
+</body>
+</html>
