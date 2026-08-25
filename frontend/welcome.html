@@ -16,6 +16,7 @@
         .header h1 { font-size: 26px; font-weight: 600; letter-spacing: 2px; }
         .header p { margin-top: 8px; opacity: .85; font-size: 14px; }
         .cards { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        .cards.single { grid-template-columns: minmax(0, 460px); justify-content: center; }
         @media (max-width: 720px) { .cards { grid-template-columns: 1fr; } }
         .card {
             background: #fff; border-radius: 14px; padding: 28px;
@@ -47,6 +48,13 @@
         .code-input { text-transform: uppercase; letter-spacing: 3px; font-size: 18px !important; text-align: center; font-family: monospace; }
         .footer { text-align: center; color: rgba(255,255,255,.75); font-size: 12px; margin-top: 22px; }
         .footer a { color: #fff; }
+        .apply-toggle {
+            display: block; margin: 22px auto 0; padding: 11px 30px; border: 1.5px solid rgba(255,255,255,.7);
+            border-radius: 24px; background: rgba(255,255,255,.12); color: #fff; font-size: 14px;
+            cursor: pointer; transition: background .15s, border .15s; backdrop-filter: blur(4px);
+        }
+        .apply-toggle:hover { background: rgba(255,255,255,.22); border-color: #fff; }
+        .hidden { display: none !important; }
     </style>
 </head>
 <body>
@@ -56,9 +64,9 @@
             <p>实时语音翻译 · 中英日西德多语种 · 语音播报</p>
         </div>
 
-        <div class="cards">
-            <!-- 申请使用 -->
-            <div class="card">
+        <div class="cards single" id="cardsWrap">
+            <!-- 申请使用（默认隐藏，点击下方按钮展开） -->
+            <div class="card hidden" id="requestCard">
                 <h2>申请使用</h2>
                 <div class="sub">提交申请后等待管理员审批，审批通过后访问码会发送到你的邮箱。</div>
                 <form id="requestForm">
@@ -114,11 +122,13 @@
                     <div class="msg" id="verifyMsg"></div>
                 </form>
                 <div style="margin-top:14px;font-size:13px;color:#888;">
-                    观众/投影请进入控制端后使用右上角"查看端"链接，或
+                    进入后使用顶部"查看端"链接，或
                     <a href="#" onclick="enterViewer();return false;" style="color:#667eea;">凭访问码进入查看端</a>。
                 </div>
             </div>
         </div>
+
+        <button class="apply-toggle" id="applyToggle">还没有访问码？提交使用申请 ›</button>
 
         <div class="footer">内部系统，请合理使用 · 管理员入口 <a href="/admin">/admin</a></div>
     </div>
@@ -189,6 +199,21 @@ async function verifyCode(target) {
 
 $('verifyForm').addEventListener('submit', (e) => { e.preventDefault(); verifyCode('app'); });
 function enterViewer() { verifyCode('viewer'); }
+
+// 申请卡片展开/收起
+const requestCard = $('requestCard');
+const applyToggle = $('applyToggle');
+applyToggle.addEventListener('click', () => {
+    const collapsed = requestCard.classList.contains('hidden');
+    requestCard.classList.toggle('hidden', !collapsed);
+    $('cardsWrap').classList.toggle('single', !collapsed);
+    applyToggle.textContent = collapsed ? '收起申请表单 ⌃' : '还没有访问码？提交使用申请 ›';
+    if (collapsed) {
+        // 展开后聚焦第一个必填项，移动端自动滚动到表单
+        requestCard.scrollIntoView({behavior: 'smooth', block: 'nearest'});
+        setTimeout(() => $('applicant').focus(), 300);
+    }
+});
 
 // 默认使用时间填明天 9:00
 (function () {

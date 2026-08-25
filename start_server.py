@@ -174,16 +174,7 @@ async def api_verify_code(request):
         # 统一提示，不区分"不存在/已失效"，避免探测
         return json_error(401, reason if code_row else "访问码无效或已过期")
 
-    # 控制端入口额外校验额度（查看端不受额度限制）
     target = str(body.get("target", "app"))
-    if target == "app":
-        usage = ctx.db.get_code_usage(code_row["id"])
-        remaining_sec = float(usage["quota_min"]) * 60 - float(usage["used_sec"])
-        if remaining_sec <= 0 and usage["status"] != "exhausted":
-            ctx.db.set_code_status(code_row["id"], "exhausted")
-        if usage["status"] == "exhausted" or remaining_sec <= 0:
-            return json_error(403, "访问码时长额度已用尽，请联系管理员追加额度")
-
     cookie_spec = make_user_cookie(ctx.signer, code_row["id"], secure=ctx.use_https)
     resp = web.json_response({"ok": True, "code_id": code_row["id"],
                               "applicant": code_row["applicant"],
@@ -291,21 +282,6 @@ async def api_admin_revoke(request):
     return web.json_response({"ok": True})
 
 
-async def api_admin_quota(request):
-    ctx: AppContext = request.app['ctx']
-    try:
-        body = await request.json()
-        code_id = int(body.get("code_id"))
-        add_min = int(body.get("add_min", 0))
-    except (TypeError, ValueError):
-        return json_error(400, "参数错误")
-    if not (1 <= add_min <= 12 * 60):
-        return json_error(400, "追加额度需在 1 分钟到 12 小时之间")
-    ctx.db.add_code_quota(code_id, add_min)
-    ctx.db.audit("admin", "code_quota_added", f"访问码 #{code_id} +{add_min} 分钟")
-    return web.json_response({"ok": True})
-
-
 async def api_admin_resend(request):
     ctx: AppContext = request.app['ctx']
     try:
@@ -389,14 +365,6 @@ async def websocket_handler(request):
     client_role = query_params.get("role", "controller")  # 默认为控制端
     if client_role not in ["controller", "viewer"]:
         client_role = "controller"
-
-    # 控制端额外校验额度
-    if not auth_error and client_role == "controller":
-        usage = ctx.db.get_code_usage(code_id)
-        remaining_sec = float(usage["quota_min"]) * 60 - float(usage["used_sec"])
-        if usage["status"] == "exhausted" or remaining_sec <= 0:
-            auth_error = "访问码时长额度已用尽，请联系管理员追加额度"
-            ctx.db.set_code_status(code_id, "exhausted")
 
     if auth_error:
         try:
@@ -595,7 +563,6 @@ async def start_server(port=15677, use_https=False):
     app.router.add_post('/api/admin/reject', require_admin(api_admin_reject))
     app.router.add_get('/api/admin/codes', require_admin(api_admin_codes))
     app.router.add_post('/api/admin/revoke', require_admin(api_admin_revoke))
-    app.router.add_post('/api/admin/quota', require_admin(api_admin_quota))
     app.router.add_post('/api/admin/resend', require_admin(api_admin_resend))
     app.router.add_get('/api/admin/usage', require_admin(api_admin_usage))
     app.router.add_get('/api/admin/audit', require_admin(api_admin_audit))

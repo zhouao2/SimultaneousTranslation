@@ -11,9 +11,7 @@
   "security": {
     "secret_key": "change-me-to-a-long-random-string",
     "admin_password": "change-me",
-    "code_valid_before_start_min": 120,
-    "quota_warn_ratio": 0.8,
-    "quota_overshoot_ratio": 1.2
+    "code_valid_before_start_min": 120
   },
   "smtp": {
     "enabled": false,

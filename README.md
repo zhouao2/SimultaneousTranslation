@@ -282,8 +282,8 @@ Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
 
 **访问码规则**：
 - 自计划使用时间**提前 2 小时**生效（`security.code_valid_before_start_min` 可调），结束时间不限制
-- 时长额度 = 申请的预计时长；用到 80% 前端提醒，用到额度 × 1.2 自动断开（`quota_warn_ratio` / `quota_overshoot_ratio` 可调）
-- 管理员可随时撤销、追加额度、重发邮件
+- 申请时填写的预计时长仅作参考展示，**不做额度限制**，不会因时长用尽而中断
+- 管理员可随时撤销、重发邮件；实际使用时长和 token 消耗照常统计
 
 **用量统计**：每次翻译会话按墙钟累计时长，火山引擎的 UsageResponse（token 消耗）逐条落库（`data/access.db`，SQLite），管理后台按访问码/按天查看 token 用量与成本（在 `pricing` 节配置每千 token 单价后自动换算金额）。
 

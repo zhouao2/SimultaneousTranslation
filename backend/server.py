@@ -176,8 +176,6 @@ class TranslationServer:
         self.access_db = access_db
         self.code_id = code_id
         self.db_session_id = None  # 访问计量会话记录 ID
-        self._quota_watchdog_task = None
-        self._quota_warned = False
         
     async def handle_client(self, websocket, client_role: str = "controller"):
         """
@@ -224,14 +222,7 @@ class TranslationServer:
         """
         logger.info(f"开始清理资源，角色: {client_role}")
         if client_role == "controller":
-            # 停止额度看门狗并结束计量会话
-            if self._quota_watchdog_task:
-                self._quota_watchdog_task.cancel()
-                try:
-                    await self._quota_watchdog_task
-                except (asyncio.CancelledError, Exception):
-                    pass
-                self._quota_watchdog_task = None
+            # 结束计量会话（墙钟时长已入库，供用量报表使用）
             if self.access_db and self.db_session_id:
                 try:
                     self.access_db.end_session(self.db_session_id)
@@ -298,13 +289,12 @@ class TranslationServer:
             })
             logger.info("已通知前端连接成功")
 
-            # 访问计量：登记会话并启动额度看门狗
+            # 访问计量：登记会话（仅统计用量，不做额度限制）
             if self.access_db and self.code_id:
                 try:
                     self.db_session_id = self.access_db.start_session(self.code_id)
                     self.access_db.audit(f"code:{self.code_id}", "session_start",
                                          f"计量会话 #{self.db_session_id} 开始")
-                    self._quota_watchdog_task = asyncio.create_task(self._quota_watchdog())
                 except Exception as e:
                     logger.error(f"访问计量初始化失败（不影响翻译功能）: {e}")
         except Exception as e:
@@ -714,62 +704,6 @@ class TranslationServer:
                     f"输出音频 {tokens['output_audio_tokens']}, "
                     f"输出文本 {tokens['output_text_tokens']} tokens")
 
-    async def _quota_watchdog(self):
-        """
-        额度看门狗：每 30 秒按墙钟累计访问码使用时长，
-        达到预警线（默认 80%）提醒，达到硬顶（默认额度 × 1.2）强制断开
-        """
-        security_config = self.config.get("security", {})
-        warn_ratio = float(security_config.get("quota_warn_ratio", 0.8))
-        overshoot_ratio = float(security_config.get("quota_overshoot_ratio", 1.2))
-        warned = False
-
-        while True:
-            await asyncio.sleep(30)
-            try:
-                self.access_db.tick_session(self.db_session_id)
-                usage = self.access_db.get_code_usage(self.code_id)
-                quota_sec = float(usage["quota_min"]) * 60
-                used_sec = float(usage["used_sec"])
-
-                if used_sec >= quota_sec * overshoot_ratio:
-                    logger.warning(f"访问码 #{self.code_id} 额度用尽"
-                                   f"（已用 {used_sec/60:.0f} 分钟 / 额度 {usage['quota_min']} 分钟），强制断开")
-                    self.access_db.set_code_status(self.code_id, "exhausted")
-                    self.access_db.audit(f"code:{self.code_id}", "quota_exceeded",
-                                         f"已用 {used_sec/60:.0f} 分钟")
-                    await self._send_to_client({
-                        "type": "quota_exceeded",
-                        "message": f"时长额度已用尽（额度 {usage['quota_min']} 分钟），本次使用已结束。如需继续请联系管理员追加额度。"
-                    })
-                    # 关闭火山引擎连接并断开控制端
-                    if self.volcengine_client:
-                        try:
-                            await self.volcengine_client.close()
-                        except Exception:
-                            pass
-                    try:
-                        raw_ws = getattr(self.client_websocket, "ws", None)
-                        if raw_ws is not None:
-                            await raw_ws.close()
-                    except Exception:
-                        pass
-                    return
-
-                if not warned and used_sec >= quota_sec * warn_ratio:
-                    warned = True
-                    remaining_min = max(0, int((quota_sec * overshoot_ratio - used_sec) / 60))
-                    logger.warning(f"访问码 #{self.code_id} 额度已用 {used_sec/quota_sec*100:.0f}%")
-                    await self._send_to_client({
-                        "type": "quota_warning",
-                        "message": f"时长额度已使用超过 {int(warn_ratio*100)}%，剩余约 {remaining_min} 分钟，请注意控制时长。"
-                    })
-            except asyncio.CancelledError:
-                raise
-            except Exception as e:
-                logger.error(f"额度看门狗异常: {e}")
-
-    
     async def _send_to_client(self, message: dict):
         """
         发送消息给客户端

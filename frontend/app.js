@@ -1254,20 +1254,6 @@ class TranslationApp {
                     setTimeout(() => { window.location.href = '/'; }, 2000);
                     break;
 
-                case 'quota_warning':
-                    // 访问码额度预警
-                    console.warn('⚠️ 额度预警:', message.message);
-                    this.updateConnectionStatus('额度预警', 'warning');
-                    alert(message.message);
-                    break;
-
-                case 'quota_exceeded':
-                    // 访问码额度用尽：服务端会断开连接
-                    console.error('🚫 额度用尽:', message.message);
-                    this.updateConnectionStatus('额度用尽', 'error');
-                    this.showError(message.message || '时长额度已用尽');
-                    break;
-
                 default:
                     console.warn('⚠️ 未知消息类型:', message.type, message);
             }

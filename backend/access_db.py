@@ -182,11 +182,10 @@ class AccessDB:
             "SELECT * FROM codes WHERE id = ?", (code_id,)).fetchone()
 
     def check_code_validity(self, code_row) -> tuple:
-        """返回 (是否有效, 原因)。规则：active 且当前时间 >= valid_from（结束不限制）。"""
+        """返回 (是否有效, 原因)。规则：active 且当前时间 >= valid_from（结束不限制）。
+        预计时长仅作为用量参考，不做额度限制。"""
         if code_row["status"] == "revoked":
             return False, "访问码已被撤销"
-        if code_row["status"] == "exhausted":
-            return False, "访问码时长额度已用尽"
         now = datetime.now()
         valid_from = datetime.fromisoformat(code_row["valid_from"])
         if now < valid_from:
@@ -203,14 +202,6 @@ class AccessDB:
     def set_code_email_status(self, code_id: int, status: str):
         with self._lock, self._conn:
             self._conn.execute("UPDATE codes SET email_status = ? WHERE id = ?", (status, code_id))
-
-    def add_code_quota(self, code_id: int, add_min: int):
-        with self._lock, self._conn:
-            self._conn.execute(
-                "UPDATE codes SET quota_min = quota_min + ?, "
-                "status = CASE WHEN status = 'exhausted' THEN 'active' ELSE status END "
-                "WHERE id = ?",
-                (add_min, code_id))
 
     def list_codes(self) -> list:
         return self._conn.execute("SELECT * FROM codes ORDER BY id DESC").fetchall()

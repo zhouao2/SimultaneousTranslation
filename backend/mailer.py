@@ -72,7 +72,7 @@ class Mailer:
 访问码：{code}
 使用入口：{base_url}
 生效时间：{valid_from_str} 起（结束时间不限制）
-时长额度：{quota_min} 分钟（系统会在额度即将用尽时提醒）
+预计时长：{quota_min} 分钟（仅作参考，不做限制）
 
 使用方法：打开使用入口，输入访问码即可进入控制端页面。
 查看端（观众大屏）入口：{base_url}/viewer
