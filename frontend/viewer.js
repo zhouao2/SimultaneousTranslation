@@ -37,6 +37,10 @@ class ViewerApp {
         this.isMobile = /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i.test(
             (navigator.userAgent || navigator.vendor || window.opera || '').toLowerCase()
         );
+        // Safari 检测（含 macOS/iOS Safari；不含 Chrome/Edge 等 Chromium 系浏览器）。
+        // Safari 不支持 OGG/Opus 的 HTML5 Audio 播放，需走 opus-decoder 软解码 + Web Audio
+        this.isSafari = /safari/i.test(navigator.userAgent || '') &&
+                        !/chrome|chromium|crios|edg|android/i.test(navigator.userAgent || '');
         this.hasUserInteracted = false;
         this.fatalError = false;  // 致命错误（房间不存在/已结束），停止自动重连
 
@@ -87,8 +91,9 @@ class ViewerApp {
                 this.ttsEnabled = e.target.checked;
                 console.log('TTS 播放开关:', this.ttsEnabled ? '开启' : '关闭');
                 
-                // 当开关打开时，立即激活音频上下文和解锁音频（移动端必需）
-                if (this.ttsEnabled && this.isMobile) {
+                // 当开关打开时立即激活音频上下文和解锁音频（移动端 / Safari 必需，
+                // Safari 因不支持 OGG/Opus 的 HTML5 播放，必须走软解码 + Web Audio）
+                if (this.ttsEnabled && (this.isMobile || this.isSafari)) {
                     await this.activateAudioContext();
                 }
             });
@@ -316,10 +321,10 @@ class ViewerApp {
     
     async activateAudioContext() {
         /**
-         * 激活音频上下文（移动端必需）
+         * 激活音频上下文（移动端 / Safari 必需）
          * 在用户打开开关时立即激活，确保音频可以播放
          */
-        if (!this.isMobile) {
+        if (!this.isMobile && !this.isSafari) {
             return;
         }
         

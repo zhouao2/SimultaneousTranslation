@@ -129,6 +129,10 @@ class TranslationApp {
 
         // iOS 检测和音频播放标志
         this.isIOS = /iphone|ipad|ipod/i.test((navigator.userAgent || '').toLowerCase());
+        // Safari 检测（含 macOS/iOS Safari，不含 Chromium 系浏览器）：
+        // Safari 不支持 OGG/Opus 的 HTML5 Audio 播放，需走 opus-decoder 软解码 + Web Audio
+        this.isSafari = /safari/i.test(navigator.userAgent || '') &&
+                        !/chrome|chromium|crios|edg|android/i.test(navigator.userAgent || '');
         this.hasUserInteracted = false;  // 用户是否有过交互（iOS 需要）
         this.pendingAudioPlay = null;  // 待播放的音频（用于延迟播放）
         
@@ -2469,10 +2473,10 @@ class TranslationApp {
         console.log('准备播放 OGG Opus 音频，数据大小:', opusData.length, '字节');
         console.log('iOS 检测:', this.isIOS);
 
-        // iOS 兼容性处理：直接使用 HTML5 Audio，不使用 Web Audio API
-        // iOS 对 Web Audio API 支持有限，且音频处理链可能不工作
-        if (this.isIOS) {
-            console.log('📱 iOS 设备，使用 HTML5 Audio 播放（跳过 Web Audio API）');
+        // iOS：优先走 Opus 软解码 + Web Audio（iOS Safari 同样不支持 OGG 的 HTML5 播放）；
+        // 解码器不可用时才回退到专门的 iOS HTML5 处理
+        if (this.isIOS && !this.opusDecoder) {
+            console.log('📱 iOS 设备且解码器不可用，使用 HTML5 Audio 播放（跳过 Web Audio API）');
             await this.playAudioOnIOS(opusData);
             return;
         }
@@ -2489,7 +2493,9 @@ class TranslationApp {
             // 由于 Opus 解码器在处理完整 OGG Opus 文件时可能出错，
             // 而浏览器原生支持 OGG Opus，我们直接使用 HTML5 Audio
             // 这样可以避免解码错误，并且性能更好
-            if (false && this.opusDecoder) {  // 暂时禁用 Opus 解码器
+            // Safari 不支持 OGG/Opus 的 HTML5 播放，走 opus-decoder 软解码 + Web Audio；
+            // Chrome/Edge/Firefox 原生支持 OGG，继续用 HTML5 Audio（更简单可靠）
+            if (this.isSafari && this.opusDecoder) {
                 try {
                     console.log('使用 Opus 解码器解码音频，数据大小:', opusData.length, '字节');
                     console.log('OpusDecoder 实例类型:', typeof this.opusDecoder);
