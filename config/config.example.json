@@ -21,7 +21,8 @@
   "tts": {
     "speaker_id": "",
     "speech_rate": 0,
-    "comment": "speaker_id: 留空使用自动声音复刻（推荐）。指定公版音色仅支持：zh_female_vv_uranus_bigtts、zh_male_jingqiangkanye_emo_mars_bigtts。speech_rate: [-50, 100]，100 为 2.0 倍速，-50 为 0.5 倍速，0 为正常（需更新 proto 后生效）。"
+    "stall_reconnect_min": 1,
+    "comment": "speaker_id: 留空使用自动声音复刻（推荐）。指定公版音色仅支持：zh_female_vv_uranus_bigtts、zh_male_jingqiangkanye_emo_mars_bigtts。speech_rate: [-50, 100]，100 为 2.0 倍速，-50 为 0.5 倍速，0 为正常（需更新 proto 后生效）。 stall_reconnect_min: TTS 停流看门狗阈值（分钟），字幕正常但超过该时长无 TTS 时自动重建会话，0 关闭。"
   },
   "security": {
     "secret_key": "change-me-to-a-long-random-string",

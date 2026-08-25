@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>同声传译系统 · 管理后台</title>
+    <title>管理后台</title>
     <style>
         :root {
             --bg-1: #667eea;
@@ -500,6 +500,7 @@
             <div class="tab" data-tab="codes" onclick="switchTab('codes')"><span class="dot"></span>访问码</div>
             <div class="tab" data-tab="usage" onclick="switchTab('usage')"><span class="dot"></span>用量与成本</div>
             <div class="tab" data-tab="audit" onclick="switchTab('audit')"><span class="dot"></span>审计日志</div>
+            <div class="tab" data-tab="rooms" onclick="switchTab('rooms')"><span class="dot"></span>活跃房间</div>
         </div>
 
         <!-- 申请 -->
@@ -593,6 +594,15 @@
         <!-- 审计 -->
         <div class="panel hidden" id="panel-audit">
             <div id="auditTable"></div>
+        </div>
+
+        <!-- 活跃房间 -->
+        <div class="panel hidden" id="panel-rooms">
+            <div class="toolbar">
+                <button class="btn sm ghost" onclick="loadRooms()">⟳ 刷新</button>
+                <span>当前进程内进行中的翻译房间；控制端断开后房间保留 5 分钟等待重连</span>
+            </div>
+            <div id="roomsTable"></div>
         </div>
     </div>
     </div>
@@ -733,6 +743,29 @@ async function refreshAll() {
     else if (TAB === 'codes') await loadCodes(true);
     else if (TAB === 'usage') await loadUsage(true);
     else if (TAB === 'audit') await loadAudit();
+    else if (TAB === 'rooms') await loadRooms();
+}
+
+// ---------- 活跃房间 ----------
+async function loadRooms() {
+    const data = await api('/api/admin/rooms');
+    const rooms = data.rooms || [];
+    const html = rooms.length ? `<table>
+        <tr><th>房间</th><th>申请人</th><th>主题</th><th>运行时长</th><th>控制端</th><th>查看端数</th><th>创建时间</th><th>查看端链接</th></tr>
+        ${rooms.map(r => `<tr>
+            <td class="code-val">${esc(r.room_id)}</td>
+            <td>${esc(r.applicant) || '-'}${r.department ? `<br><span style="color:#9aa0b5;font-size:12px;">${esc(r.department)}</span>` : ''}</td>
+            <td>${esc(r.topic) || '-'}</td>
+            <td>${Math.floor(r.uptime_sec / 60)} 分钟</td>
+            <td>${r.has_controller
+                ? '<span class="tag active">在线</span>'
+                : '<span class="tag pending">等待重连</span>'}</td>
+            <td>${r.viewer_count}</td>
+            <td>${fmtDT(new Date(r.created_at * 1000).toISOString())}</td>
+            <td><button class="btn sm ghost" onclick="navigator.clipboard.writeText(location.origin + '/viewer?room=' + '${esc(r.room_id)}').then(() => toast('链接已复制'))">复制链接</button></td>
+        </tr>`).join('')}</table>`
+        : '<div class="empty">当前没有进行中的房间</div>';
+    document.getElementById('roomsTable').innerHTML = html;
 }
 
 // ---------- 申请 ----------

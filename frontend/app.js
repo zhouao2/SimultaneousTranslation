@@ -13,13 +13,15 @@ class TranslationApp {
         // 使用当前页面的端口，这样WebSocket会使用相同的端口
         const wsPort = window.location.port || (window.location.protocol === 'https:' ? '443' : '80');
         // WebSocket 路径为 /ws，角色为 controller（控制端）
-        this.wsUrl = `${wsProtocol}//${wsHost}:${wsPort}/ws?role=controller`;
-        
+        this.wsBaseUrl = `${wsProtocol}//${wsHost}:${wsPort}/ws?role=controller`;
+        this.roomId = null;          // 当前房间 ID（服务端 room_info 下发）
+        this.roomResumeWindowMs = 10 * 60 * 1000;  // 断线后可恢复房间的时间窗
+
         console.log('WebSocket URL 配置:', {
             protocol: window.location.protocol,
             hostname: wsHost,
             wsProtocol: wsProtocol,
-            wsUrl: this.wsUrl
+            wsUrl: this.wsBaseUrl
         });
         
         // 音频相关
@@ -690,6 +692,7 @@ class TranslationApp {
     
     async stop() {
         this.isRecording = false;
+        this.clearRoom();  // 主动结束：清除房间，下次开始翻译进入新房间
         
         // 发送停止消息给后端（通知查看端）
         if (this.ws && this.ws.readyState === WebSocket.OPEN) {
@@ -1143,60 +1146,111 @@ class TranslationApp {
         }
     }
     
+    buildWsUrl() {
+        /**
+         * 构建 WS 地址：恢复窗口内携带房间 ID，服务端据此恢复本场上下文
+         */
+        const saved = this.getSavedRoom();
+        const room = this.roomId || (saved ? saved.roomId : null);
+        return room ? `${this.wsBaseUrl}&room=${encodeURIComponent(room)}` : this.wsBaseUrl;
+    }
+
+    getSavedRoom() {
+        /** 从 sessionStorage 读取可恢复的房间（10 分钟窗口内有效） */
+        try {
+            const raw = sessionStorage.getItem('st_room');
+            if (!raw) return null;
+            const saved = JSON.parse(raw);
+            if (Date.now() - saved.ts > this.roomResumeWindowMs) {
+                sessionStorage.removeItem('st_room');
+                return null;
+            }
+            return saved;
+        } catch (e) {
+            return null;
+        }
+    }
+
+    saveRoom(roomId) {
+        this.roomId = roomId;
+        try {
+            sessionStorage.setItem('st_room', JSON.stringify({roomId, ts: Date.now()}));
+        } catch (e) {}
+        this.updateViewerLink();
+    }
+
+    clearRoom() {
+        /** 主动结束会议时清除房间，下次连接开新房间 */
+        this.roomId = null;
+        try {
+            sessionStorage.removeItem('st_room');
+        } catch (e) {}
+    }
+
+    updateViewerLink() {
+        /** 更新顶部查看端链接为本场专属链接 */
+        const link = document.querySelector('a[href="/viewer"]');
+        if (link && this.roomId) {
+            link.href = `/viewer?room=${encodeURIComponent(this.roomId)}`;
+            link.title = `本场查看端链接（房间 ${this.roomId}）`;
+        }
+    }
+
     connectWebSocket() {
         return new Promise((resolve, reject) => {
             try {
-                console.log('正在连接 WebSocket:', this.wsUrl);
+                const wsUrl = this.buildWsUrl();
+                console.log('正在连接 WebSocket:', wsUrl);
                 console.log('当前页面协议:', window.location.protocol);
                 console.log('当前页面主机:', window.location.hostname);
-                
-                this.ws = new WebSocket(this.wsUrl);
-                
+
+                this.ws = new WebSocket(wsUrl);
+
                 this.ws.onopen = () => {
-                    console.log('WebSocket 连接已建立:', this.wsUrl);
+                    console.log('WebSocket 连接已建立:', wsUrl);
                     this.updateConnectionStatus('已连接', 'connected');
-                    
+
                     // 连接成功后发送当前语言设置
                     this.sendLanguageUpdate();
-                    
+
                     // 启动 TTS 健康检查
                     this.startTTSHealthCheck();
 
                     resolve();
                 };
-                
+
                 this.ws.onmessage = (event) => {
                     this.handleWebSocketMessage(event);
                 };
-                
+
                 this.ws.onerror = (error) => {
                     console.error('WebSocket 错误:', error);
-                    console.error('WebSocket URL:', this.wsUrl);
+                    console.error('WebSocket URL:', wsUrl);
                     console.error('WebSocket readyState:', this.ws.readyState);
-                    
+
                     let errorMsg = 'WebSocket 连接错误';
                     if (this.ws.readyState === WebSocket.CLOSED) {
                         errorMsg = '无法连接到服务器，请检查服务器是否运行';
                     } else if (this.ws.readyState === WebSocket.CONNECTING) {
                         errorMsg = '正在连接服务器...';
                     }
-                    
+
                     this.showError(errorMsg);
                     this.updateConnectionStatus('连接失败', 'disconnected');
                     reject(error);
                 };
-                
+
                 this.ws.onclose = (event) => {
                     console.log('WebSocket 连接已关闭');
                     console.log('关闭代码:', event.code);
                     console.log('关闭原因:', event.reason);
                     console.log('是否正常关闭:', event.wasClean);
-                    
+
                     this.updateConnectionStatus('未连接', 'disconnected');
-                    
+
                     // 停止 TTS 健康检查
                     this.stopTTSHealthCheck();
-                    
+
                     // 如果不是正常关闭，尝试重连
                     if (this.isRecording && !event.wasClean) {
                         console.log('连接异常关闭，3秒后尝试重连...');
@@ -1207,7 +1261,7 @@ class TranslationApp {
                         }, 3000);
                     }
                 };
-                
+
             } catch (error) {
                 console.error('创建 WebSocket 连接时出错:', error);
                 this.showError(`WebSocket 连接失败: ${error.message}`);
@@ -1233,6 +1287,12 @@ class TranslationApp {
                 case 'connected':
                     console.log('✓ 翻译服务已连接');
                     break;
+
+                case 'room_info':
+                    // 房间就绪：记录房间 ID 并更新查看端链接
+                    console.log(`🏠 ${message.message}`);
+                    this.saveRoom(message.room_id);
+                    break;
                     
                 case 'translation':
                     console.log('🌐 收到翻译数据');
@@ -1252,6 +1312,18 @@ class TranslationApp {
                     console.error('❌ 鉴权失败:', message.message);
                     this.showError(message.message || '访问码无效，请重新验证');
                     setTimeout(() => { window.location.href = '/'; }, 2000);
+                    break;
+
+                case 'tts_reconnecting':
+                    // 服务端检测到 TTS 停流，正在自动重建火山引擎会话
+                    console.warn('🔄 TTS 停流，服务端自动恢复中:', message.message);
+                    this.updateConnectionStatus('语音恢复中…', 'warning');
+                    break;
+
+                case 'tts_reconnected':
+                    // 会话重建成功，语音输出恢复
+                    console.log('✓ 语音输出已恢复（服务端已重建会话）');
+                    this.updateConnectionStatus('已连接', 'connected');
                     break;
 
                 default:

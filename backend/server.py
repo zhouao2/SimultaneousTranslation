@@ -4,6 +4,8 @@
 import asyncio
 import json
 import logging
+import secrets
+import time
 import websockets
 from websockets.server import serve
 from typing import Optional, Dict, List
@@ -29,67 +31,65 @@ logger = logging.getLogger(__name__)
 
 
 class TranslationSession:
-    """翻译会话管理器（全局单例）"""
-    
-    _instance = None
-    _lock = None
-    
-    @classmethod
-    def _ensure_lock(cls):
-        """确保锁已初始化"""
-        if cls._lock is None:
-            cls._lock = asyncio.Lock()
-    
-    def __init__(self, config: dict):
+    """翻译房间：一场翻译会议的上下文（控制端 + 查看端 + 字幕状态）
+
+    多房间架构下每场会议一个实例，由 RoomRegistry 管理；
+    控制端断开后房间保留一段时间（延迟回收），等待重连恢复。
+    """
+
+    def __init__(self, config: dict, room_id: str):
         """
-        初始化会话管理器
-        
+        初始化房间
+
         Args:
             config: 配置字典
+            room_id: 房间 ID
         """
         self.config = config
+        self.room_id = room_id
+        self.created_at = time.time()
         self.volcengine_client: Optional[VolcengineASTClient] = None
         self.controller_websocket = None  # 控制端连接
         self.viewer_websockets: Dict[str, any] = {}  # 查看端连接字典 {client_id: websocket}
+        # 控制端信息（来自其访问码），供管理端房间列表展示；控制端断开后保留至房间回收
+        self.controller_info = {"applicant": "", "department": "", "topic": "", "code": ""}
         self.current_source_text = ""  # 当前原文
         self.current_target_text = ""  # 当前译文
         self.completed_source_lines: List[str] = []  # 已完成的原文行
         self.completed_target_lines: List[str] = []  # 已完成的译文行
         self.max_history_lines = 8  # 最大历史记录数
-        
-    @classmethod
-    async def get_instance(cls, config: dict):
-        """获取单例实例"""
-        cls._ensure_lock()
-        async with cls._lock:
-            if cls._instance is None:
-                cls._instance = cls(config)
-            return cls._instance
-    
+
     async def add_controller(self, websocket, volcengine_client: VolcengineASTClient):
-        """添加控制端连接"""
-        if self.controller_websocket is not None:
-            logger.warning("已有控制端连接，关闭旧连接")
+        """添加控制端连接（同一房间再次连入时顶替旧连接）"""
+        if self.controller_websocket is not None and self.controller_websocket is not websocket:
+            logger.info(f"[room {self.room_id}] 已有控制端连接，关闭旧连接（被新连接顶替）")
             try:
                 if hasattr(self.controller_websocket, 'close'):
                     await self.controller_websocket.close()
+                elif hasattr(self.controller_websocket, 'ws'):
+                    await self.controller_websocket.ws.close()
             except:
                 pass
-        
+
         self.controller_websocket = websocket
         self.volcengine_client = volcengine_client
-        logger.info("控制端已连接")
-    
-    async def remove_controller(self):
-        """移除控制端连接"""
+        logger.info(f"[room {self.room_id}] 控制端已连接")
+
+    async def remove_controller(self, websocket=None):
+        """移除控制端连接。传入 websocket 时仅在仍是当前控制端时移除（防止顶替竞争）"""
+        if websocket is not None and self.controller_websocket is not None \
+                and self.controller_websocket is not websocket:
+            logger.info(f"[room {self.room_id}] 忽略旧控制端的清理请求（已被新连接顶替）")
+            return
         self.controller_websocket = None
-        logger.info("控制端已断开")
-    
+        logger.info(f"[room {self.room_id}] 控制端已断开")
+
     async def add_viewer(self, websocket) -> str:
         """添加查看端连接，返回客户端ID"""
         client_id = str(uuid.uuid4())
         self.viewer_websockets[client_id] = websocket
-        logger.info(f"查看端已连接，客户端ID: {client_id}，当前查看端数量: {len(self.viewer_websockets)}")
+        logger.info(f"[room {self.room_id}] 查看端已连接，客户端ID: {client_id}，"
+                    f"当前查看端数量: {len(self.viewer_websockets)}")
         return client_id
     
     async def remove_viewer(self, client_id: str):
@@ -153,11 +153,101 @@ class TranslationSession:
             # 不抛出异常，避免影响连接建立
 
 
+# 房间 ID 字符集：与访问码一致，去掉易混淆字符
+ROOM_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
+ROOM_ID_LENGTH = 6
+# 控制端断开后房间的保留时间（秒），期间重连可恢复本场上下文和查看端
+ROOM_IDLE_TEARDOWN_SEC = 5 * 60
+
+
+class RoomRegistry:
+    """房间注册表：room_id -> TranslationSession（进程级，多房间并发互不影响）"""
+
+    def __init__(self):
+        self._rooms: Dict[str, TranslationSession] = {}
+        self._idle_tasks: Dict[str, asyncio.Task] = {}
+
+    @staticmethod
+    def generate_room_id() -> str:
+        return "".join(secrets.choice(ROOM_ALPHABET) for _ in range(ROOM_ID_LENGTH))
+
+    def get(self, room_id: str) -> Optional[TranslationSession]:
+        return self._rooms.get(room_id)
+
+    def get_or_create(self, room_id: Optional[str], config: dict) -> tuple:
+        """获取房间；不存在则以给定 ID（或新生成）创建。返回 (session, created)"""
+        if room_id and room_id in self._rooms:
+            return self._rooms[room_id], False
+        new_id = room_id or self.generate_room_id()
+        # 极小概率撞上已有房间 ID 时重新生成
+        while new_id in self._rooms:
+            new_id = self.generate_room_id()
+        session = TranslationSession(config, new_id)
+        self._rooms[new_id] = session
+        return session, True
+
+    def cancel_idle_teardown(self, room_id: str):
+        task = self._idle_tasks.pop(room_id, None)
+        if task:
+            task.cancel()
+
+    def schedule_idle_teardown(self, room_id: str, delay_sec: Optional[int] = None):
+        """控制端断开后延迟回收房间；到期仍无控制端则通知查看端并移除房间"""
+        self.cancel_idle_teardown(room_id)
+
+        async def _teardown():
+            try:
+                await asyncio.sleep(delay_sec if delay_sec is not None else ROOM_IDLE_TEARDOWN_SEC)
+                room = self._rooms.get(room_id)
+                if room is None or room.controller_websocket is not None:
+                    return
+                logger.info(f"[room {room_id}] 控制端超过保留时间未重连，回收房间（查看端 {len(room.viewer_websockets)} 个）")
+                await room.broadcast_to_viewers({
+                    "type": "room_closed",
+                    "message": "本场翻译已结束"
+                })
+                for client_id, ws in list(room.viewer_websockets.items()):
+                    try:
+                        raw_ws = getattr(ws, 'ws', None)
+                        if raw_ws is not None:
+                            await raw_ws.close()
+                    except Exception:
+                        pass
+                self._rooms.pop(room_id, None)
+            except asyncio.CancelledError:
+                pass
+
+        self._idle_tasks[room_id] = asyncio.create_task(_teardown())
+
+    def snapshot(self) -> List[dict]:
+        """房间运行态快照（供管理后台展示）"""
+        result = []
+        now = time.time()
+        for room_id, room in self._rooms.items():
+            result.append({
+                "room_id": room_id,
+                "created_at": room.created_at,
+                "uptime_sec": int(now - room.created_at),
+                "has_controller": room.controller_websocket is not None,
+                "viewer_count": len(room.viewer_websockets),
+                "applicant": room.controller_info.get("applicant", ""),
+                "department": room.controller_info.get("department", ""),
+                "topic": room.controller_info.get("topic", ""),
+                "code": room.controller_info.get("code", ""),
+            })
+        return sorted(result, key=lambda r: r["created_at"])
+
+
+# 进程级房间注册表
+ROOM_REGISTRY = RoomRegistry()
+
+
 class TranslationServer:
     """翻译服务器"""
     
     def __init__(self, config: dict, client_role: str = "controller",
-                 access_db=None, code_id: Optional[int] = None):
+                 access_db=None, code_id: Optional[int] = None,
+                 room_id: Optional[str] = None, code_info: Optional[dict] = None):
         """
         初始化服务器
 
@@ -166,9 +256,14 @@ class TranslationServer:
             client_role: 客户端角色 ("controller" 或 "viewer")
             access_db: 访问控制数据库（可选，用于用量计量与额度管控）
             code_id: 当前连接绑定的访问码 ID（可选）
+            room_id: 房间 ID（可选）。控制端携带时恢复该房间，否则新建；
+                     查看端携带时加入该房间
+            code_info: 访问码信息（申请人/部门/主题/码值），控制端连接成功后写入房间
         """
         self.config = config
         self.client_role = client_role
+        self.room_id = (room_id or "").strip().upper() or None
+        self.code_info = code_info or {}
         self.volcengine_client: Optional[VolcengineASTClient] = None
         self.client_websocket = None
         self.session: Optional[TranslationSession] = None
@@ -176,32 +271,50 @@ class TranslationServer:
         self.access_db = access_db
         self.code_id = code_id
         self.db_session_id = None  # 访问计量会话记录 ID
+        # TTS 停流看门狗：字幕仍在推进但长时间没有 TTS 事件时自动重建火山引擎会话
+        self._tts_watchdog_task = None
+        self._last_tts_ts = None          # 最近一次 TTS 事件（350/351/352）时间
+        self._last_subtitle_ts = None     # 最近一次字幕事件（650-655）时间
+        self._controller_connected_ts = None
+        self._tts_rebuild_count = 0
+        self._volcengine_rebuilding = False  # 会话重建中，音频直接丢弃避免并发重连
         
     async def handle_client(self, websocket, client_role: str = "controller"):
         """
         处理客户端连接（初始化阶段）
-        
+
         Args:
             websocket: 客户端 WebSocket 连接
             client_role: 客户端角色 ("controller" 或 "viewer")
         """
         self.client_role = client_role
         self.client_websocket = websocket
-        
-        # 获取全局会话实例
-        self.session = await TranslationSession.get_instance(self.config)
-        
+
+        # 房间解析：控制端按 room 参数恢复或新建房间；查看端按 room 参数加入指定房间
+        if client_role == "controller":
+            self.session, created = ROOM_REGISTRY.get_or_create(self.room_id, self.config)
+            self.room_id = self.session.room_id
+            if created:
+                logger.info(f"创建新房间: {self.room_id}")
+            else:
+                logger.info(f"控制端重连/顶替，恢复房间: {self.room_id}")
+            ROOM_REGISTRY.cancel_idle_teardown(self.room_id)
+        else:
+            self.session = ROOM_REGISTRY.get(self.room_id) if self.room_id else None
+            if self.session is None:
+                raise Exception("房间不存在或已结束，请使用控制端分享的查看端链接进入")
+
         try:
             client_address = websocket.remote_address if hasattr(websocket, 'remote_address') else "unknown"
-            logger.info(f"客户端连接: {client_address}, 角色: {client_role}")
-            
+            logger.info(f"客户端连接: {client_address}, 角色: {client_role}, 房间: {self.room_id}")
+
             if client_role == "controller":
                 # 控制端：初始化火山引擎连接
                 await self._handle_controller_connection(websocket)
             else:
                 # 查看端：只接收广播消息
                 await self._handle_viewer_connection(websocket)
-                
+
         except Exception as e:
             logger.error(f"处理客户端连接时出错: {e}", exc_info=True)
             try:
@@ -222,6 +335,14 @@ class TranslationServer:
         """
         logger.info(f"开始清理资源，角色: {client_role}")
         if client_role == "controller":
+            # 停止 TTS 停流看门狗
+            if self._tts_watchdog_task:
+                self._tts_watchdog_task.cancel()
+                try:
+                    await self._tts_watchdog_task
+                except (asyncio.CancelledError, Exception):
+                    pass
+                self._tts_watchdog_task = None
             # 结束计量会话（墙钟时长已入库，供用量报表使用）
             if self.access_db and self.db_session_id:
                 try:
@@ -232,12 +353,15 @@ class TranslationServer:
                     logger.error(f"结束计量会话失败: {e}")
                 self.db_session_id = None
             if self.session:
-                await self.session.remove_controller()
+                await self.session.remove_controller(self.client_websocket)
             if self.volcengine_client:
                 try:
                     await self.volcengine_client.close()
                 except:
                     pass
+            # 控制端断开后房间保留一段时间等待重连，到期自动回收并通知查看端
+            if self.room_id and self.session is not None:
+                ROOM_REGISTRY.schedule_idle_teardown(self.room_id)
         else:
             if self.viewer_client_id and self.session:
                 await self.session.remove_viewer(self.viewer_client_id)
@@ -281,11 +405,26 @@ class TranslationServer:
             
             # 注册到会话管理器
             await self.session.add_controller(websocket, self.volcengine_client)
+
+            # 将控制端的访问码信息写入房间（管理端房间列表展示用）
+            if self.code_info:
+                self.session.controller_info = {
+                    "applicant": self.code_info.get("applicant", ""),
+                    "department": self.code_info.get("department", ""),
+                    "topic": self.code_info.get("topic", ""),
+                    "code": self.code_info.get("code", ""),
+                }
             
-            # 通知前端连接成功
+            # 通知前端连接成功，并告知房间信息（查看端链接凭此加入本场）
             await self._send_to_client({
                 "type": "connected",
                 "message": "已连接到翻译服务"
+            })
+            await self._send_to_client({
+                "type": "room_info",
+                "room_id": self.room_id,
+                "viewer_path": f"/viewer?room={self.room_id}",
+                "message": f"房间 {self.room_id} 已就绪，查看端链接已生成"
             })
             logger.info("已通知前端连接成功")
 
@@ -297,6 +436,10 @@ class TranslationServer:
                                          f"计量会话 #{self.db_session_id} 开始")
                 except Exception as e:
                     logger.error(f"访问计量初始化失败（不影响翻译功能）: {e}")
+
+            # 启动 TTS 停流看门狗
+            self._controller_connected_ts = time.time()
+            self._tts_watchdog_task = asyncio.create_task(self._tts_stall_watchdog())
         except Exception as e:
             logger.error(f"连接火山引擎失败: {e}", exc_info=True)
             # 清理失败的连接
@@ -368,6 +511,10 @@ class TranslationServer:
                 if not self.volcengine_client:
                     logger.warning("收到音频数据但 volcengine_client 未初始化（可能是查看端或连接失败）")
                     logger.debug(f"客户端角色: {self.client_role}, volcengine_client: {self.volcengine_client}")
+                    return
+
+                # 火山引擎会话重建期间直接丢弃音频，避免触发并发重连
+                if self._volcengine_rebuilding:
                     return
                 
                 if not self.volcengine_client.connected:
@@ -564,6 +711,12 @@ class TranslationServer:
             event = data.get("event")
             text = data.get("text", "")
 
+            # TTS 停流看门狗的时间戳：字幕事件与 TTS 事件分别记录
+            if event in (350, 351, 352):
+                self._last_tts_ts = time.time()
+            elif 650 <= event <= 655:
+                self._last_subtitle_ts = time.time()
+
             # 访问计量：记录 UsageResponse (154) 的 token 消耗
             if event == 154 and self.access_db and self.db_session_id and self.code_id:
                 try:
@@ -703,6 +856,103 @@ class TranslationServer:
                     f"输入音频 {tokens['input_audio_tokens']}, "
                     f"输出音频 {tokens['output_audio_tokens']}, "
                     f"输出文本 {tokens['output_text_tokens']} tokens")
+
+    # TTS 停流判定参数：字幕活跃窗口（最近 30 秒内有字幕才算"仍在说话"）
+    TTS_STALL_SUBTITLE_ACTIVE_SEC = 30
+    # 单连接最多自动重建次数（防止重建风暴）
+    TTS_STALL_MAX_REBUILDS = 20
+
+    def _tts_stalled(self, now: float) -> bool:
+        """
+        判定 TTS 是否停流：字幕仍在推进（最近 30 秒内有字幕事件），
+        且距最后一次 TTS 事件（或连接建立，若从未收到 TTS）超过阈值。
+        说话人停顿（无字幕推进）不算停流。
+        """
+        if self._last_subtitle_ts is None:
+            return False  # 从未收到字幕，无从判断
+        if now - self._last_subtitle_ts > self.TTS_STALL_SUBTITLE_ACTIVE_SEC:
+            return False  # 字幕已停（说话人停顿），无 TTS 属正常
+        baseline = self._last_tts_ts or self._controller_connected_ts
+        if baseline is None:
+            return False
+        threshold = float(self.config.get("tts", {}).get("stall_reconnect_min", 3)) * 60
+        if threshold <= 0:
+            return False  # 配置为 0 表示关闭看门狗
+        return now - baseline > threshold
+
+    async def _rebuild_volcengine_session(self, reason: str):
+        """重建火山引擎会话（close -> reconnect -> StartSession）"""
+        self._volcengine_rebuilding = True
+        try:
+            logger.warning(f"🔄 重建火山引擎会话: {reason}")
+            if self.access_db and self.code_id:
+                try:
+                    self.access_db.audit(f"code:{self.code_id}", "session_rebuild", reason)
+                except Exception:
+                    pass
+            await self._send_to_client({
+                "type": "tts_reconnecting",
+                "message": f"语音输出通道异常（{reason}），正在自动恢复，字幕不受影响…"
+            })
+            if self.volcengine_client:
+                try:
+                    await self.volcengine_client.close()  # 会先发 FinishSession，冲刷计量
+                except Exception:
+                    pass
+            await asyncio.sleep(0.5)  # 等待连接完全关闭
+            await self.volcengine_client.connect()
+            await self.volcengine_client.send_start_session()
+            # 重建后重置基线，开启新的停流观察窗口
+            self._last_tts_ts = time.time()
+            self._tts_rebuild_count += 1
+            logger.info(f"✓ 火山引擎会话重建成功（本连接第 {self._tts_rebuild_count} 次）")
+            await self._send_to_client({
+                "type": "tts_reconnected",
+                "message": "语音输出已恢复"
+            })
+            return True
+        except Exception as e:
+            logger.error(f"火山引擎会话重建失败: {e}", exc_info=True)
+            await self._send_to_client({
+                "type": "error",
+                "message": f"语音输出恢复失败: {e}，将在稍后重试"
+            })
+            return False
+        finally:
+            self._volcengine_rebuilding = False
+
+    async def _tts_stall_watchdog(self):
+        """
+        TTS 停流看门狗：每 15 秒检查一次。
+        长会话中若火山引擎停止下发 TTS（字幕正常显示但没有语音），
+        自动重建会话恢复语音输出——这是长会话丢 TTS 问题的根治手段。
+        """
+        try:
+            while True:
+                await asyncio.sleep(15)
+                try:
+                    if self._volcengine_rebuilding:
+                        continue
+                    if not self.volcengine_client or not self.volcengine_client.connected:
+                        continue
+                    if self._tts_rebuild_count >= self.TTS_STALL_MAX_REBUILDS:
+                        logger.error(f"TTS 自动重建已达上限（{self.TTS_STALL_MAX_REBUILDS} 次），停止看门狗")
+                        return
+                    if self._tts_stalled(time.time()):
+                        stalled_min = 3
+                        baseline = self._last_tts_ts or self._controller_connected_ts
+                        if baseline:
+                            stalled_min = round((time.time() - baseline) / 60, 1)
+                        ok = await self._rebuild_volcengine_session(
+                            f"字幕正常但已 {stalled_min} 分钟无 TTS 事件")
+                        if not ok:
+                            await asyncio.sleep(30)  # 重建失败后退避，避免密集重试
+                except asyncio.CancelledError:
+                    raise
+                except Exception as e:
+                    logger.error(f"TTS 停流看门狗异常: {e}")
+        except asyncio.CancelledError:
+            pass
 
     async def _send_to_client(self, message: dict):
         """

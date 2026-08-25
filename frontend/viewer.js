@@ -10,8 +10,11 @@ class ViewerApp {
         const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         const wsHost = window.location.hostname || 'localhost';
         const wsPort = window.location.port || (window.location.protocol === 'https:' ? '443' : '80');
-        // WebSocket 路径为 /ws，角色为 viewer
-        this.wsUrl = `${wsProtocol}//${wsHost}:${wsPort}/ws?role=viewer`;
+        // WebSocket 路径为 /ws，角色为 viewer；房间 ID 从 URL 读取（控制端分享的链接）
+        const roomParam = new URLSearchParams(window.location.search).get('room') || '';
+        this.roomId = roomParam.trim().toUpperCase();
+        this.wsUrl = `${wsProtocol}//${wsHost}:${wsPort}/ws?role=viewer` +
+                     (this.roomId ? `&room=${encodeURIComponent(this.roomId)}` : '');
         
         // TTS 播放
         this.ttsAudioContext = null;
@@ -35,7 +38,8 @@ class ViewerApp {
             (navigator.userAgent || navigator.vendor || window.opera || '').toLowerCase()
         );
         this.hasUserInteracted = false;
-        
+        this.fatalError = false;  // 致命错误（房间不存在/已结束），停止自动重连
+
         // UI 元素
         this.connectionStatusEl = document.getElementById('connectionStatus');
         this.sourceTextEl = document.getElementById('sourceText');
@@ -503,8 +507,8 @@ class ViewerApp {
                     clearTimeout(timeout);
                     console.log('WebSocket 连接已关闭', event.code, event.reason);
                     this.updateConnectionStatus('Disconnected', false);
-                    // 尝试重连（仅在非正常关闭时）
-                    if (event.code !== 1000) { // 1000 是正常关闭
+                    // 尝试重连（仅在非正常关闭且无致命错误时）
+                    if (event.code !== 1000 && !this.fatalError) { // 1000 是正常关闭
                         setTimeout(() => {
                             if (!this.ws || this.ws.readyState === WebSocket.CLOSED) {
                                 console.log('尝试重新连接...');
@@ -579,17 +583,55 @@ class ViewerApp {
                     this.updateTargetText();
                     break;
                     
+                case 'auth_error':
+                    // 鉴权失败：缺少房间参数/未登录等，提示并停止重连
+                    console.error('❌ 鉴权失败:', message.message);
+                    this.fatalError = true;
+                    this.updateConnectionStatus('Access Denied', false);
+                    this.showFatalError(message.message || '无权访问，请从控制端分享的链接进入');
+                    break;
+
                 case 'error':
                     console.error('❌ 收到错误:', message.message);
                     this.updateConnectionStatus('Connection Error', false);
+                    // 房间不存在等致命错误：停止自动重连，提示重新进入
+                    if (message.message && message.message.includes('房间')) {
+                        this.fatalError = true;
+                        this.updateConnectionStatus('Room Closed', false);
+                        this.showFatalError(message.message);
+                    }
                     break;
-                    
+
+                case 'room_closed':
+                    // 本场翻译已结束（房间被服务端回收）
+                    console.log('⏹️ 本场已结束');
+                    this.fatalError = true;
+                    this.isTranslationActive = false;
+                    this.updateConnectionStatus('Ended', false);
+                    this.showFatalError('本场翻译已结束');
+                    break;
+
                 default:
                     console.warn('⚠️ 未知消息类型:', message.type);
             }
         } catch (error) {
             console.error('❌ 处理 WebSocket 消息失败:', error);
         }
+    }
+
+    showFatalError(message) {
+        /** 覆盖层提示（不弹 alert，适合投影场景） */
+        let overlay = document.getElementById('fatalOverlay');
+        if (!overlay) {
+            overlay = document.createElement('div');
+            overlay.id = 'fatalOverlay';
+            overlay.style.cssText = 'position:fixed;inset:0;background:rgba(20,20,30,.88);' +
+                'display:flex;align-items:center;justify-content:center;z-index:9999;' +
+                'color:#fff;font-size:22px;text-align:center;line-height:1.8;padding:24px;';
+            document.body.appendChild(overlay);
+        }
+        overlay.innerHTML = `${message.replace(/</g, '&lt;')}<br>` +
+            '<a href="/" style="color:#8ab4ff;font-size:16px;">返回首页</a>';
     }
     
     handleStateSync(message) {

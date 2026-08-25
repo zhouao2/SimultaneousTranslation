@@ -32,7 +32,7 @@ backend_dir = os.path.join(project_root, 'backend')
 if backend_dir not in sys.path:
     sys.path.insert(0, backend_dir)
 
-from backend.server import TranslationServer, load_config
+from backend.server import TranslationServer, load_config, ROOM_REGISTRY
 from backend.access_db import AccessDB
 from backend.auth import (CookieSigner, get_code_id_from_request, is_admin,
                           make_user_cookie, make_admin_cookie)
@@ -399,6 +399,22 @@ async def api_admin_audit(request):
     return web.json_response({"ok": True, "logs": [dict(r) for r in rows]})
 
 
+async def api_health(request):
+    """健康检查（公开）：进程存活与房间概况"""
+    rooms = ROOM_REGISTRY.snapshot()
+    return web.json_response({
+        "ok": True,
+        "rooms": len(rooms),
+        "active_rooms": sum(1 for r in rooms if r["has_controller"]),
+        "viewers": sum(r["viewer_count"] for r in rooms),
+    })
+
+
+async def api_admin_rooms(request):
+    """活跃房间列表（管理端）"""
+    return web.json_response({"ok": True, "rooms": ROOM_REGISTRY.snapshot()})
+
+
 # ---------- WebSocket ----------
 
 async def websocket_handler(request):
@@ -411,6 +427,7 @@ async def websocket_handler(request):
     # 鉴权：cookie 中解析访问码登录态
     code_id = get_code_id_from_request(ctx.signer, request)
     auth_error = None
+    code_row = None
     if code_id is None:
         auth_error = "未登录，请先在首页输入访问码"
     else:
@@ -422,11 +439,15 @@ async def websocket_handler(request):
             if not valid:
                 auth_error = reason
 
-    # 从URL参数获取客户端角色
+    # 从URL参数获取客户端角色与房间
     query_params = request.query
     client_role = query_params.get("role", "controller")  # 默认为控制端
     if client_role not in ["controller", "viewer"]:
         client_role = "controller"
+    room_id = (query_params.get("room") or "").strip().upper() or None
+    # 查看端必须携带房间参数（从控制端分享的链接进入）
+    if client_role == "viewer" and not room_id:
+        auth_error = auth_error or "缺少房间参数，请使用控制端分享的查看端链接进入"
 
     if auth_error:
         try:
@@ -436,10 +457,19 @@ async def websocket_handler(request):
         logger.warning(f"WebSocket 鉴权失败: {request.remote}, 角色: {client_role}, 原因: {auth_error}")
         return ws
 
-    # 创建翻译服务器实例（绑定访问码，用于计量）
+    # 创建翻译服务器实例（绑定访问码与房间，携带访问码信息供房间列表展示）
     config = load_config()
+    code_info = None
+    if code_row is not None:
+        code_info = {
+            "applicant": code_row["applicant"],
+            "department": code_row["department"] or "",
+            "topic": code_row["topic"] or "",
+            "code": code_row["code"],
+        }
     server = TranslationServer(config, client_role=client_role,
-                               access_db=ctx.db, code_id=code_id)
+                               access_db=ctx.db, code_id=code_id, room_id=room_id,
+                               code_info=code_info)
 
     # 创建适配器，让aiohttp的WebSocket看起来像websockets库的WebSocket
     class WebSocketAdapter:
@@ -628,6 +658,8 @@ async def start_server(port=15677, use_https=False):
     app.router.add_post('/api/admin/resend', require_admin(api_admin_resend))
     app.router.add_get('/api/admin/usage', require_admin(api_admin_usage))
     app.router.add_get('/api/admin/audit', require_admin(api_admin_audit))
+    app.router.add_get('/api/admin/rooms', require_admin(api_admin_rooms))
+    app.router.add_get('/api/health', api_health)
 
     # 静态文件（CSS、JS等）- 使用通配符匹配所有文件
     async def static_handler(request):
@@ -654,8 +686,9 @@ async def start_server(port=15677, use_https=False):
         ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
         ssl_context.load_cert_chain(cert_file, key_file)
 
-    # 检查端口是否被占用
+    # 检查端口是否被占用（设置 SO_REUSEADDR，避免刚停止的服务留下 TIME_WAIT 导致误报）
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     try:
         sock.bind(('0.0.0.0', port))
         sock.close()
