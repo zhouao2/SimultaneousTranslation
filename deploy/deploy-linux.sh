@@ -14,7 +14,7 @@
 #   重建虚拟环境并安装最新依赖，重启服务。
 #
 # 脚本做这些事：
-#   - 安装系统依赖（python3.11+、venv、sqlite3、rsync）
+#   - 安装系统依赖（python3.10+、venv、sqlite3、rsync）
 #   - 创建专用低权限系统账号（非 root 运行）
 #   - 同步代码到 DEPLOY_DIR（排除运行时数据），创建 .venv 并安装依赖
 #   - 无证书时生成自签名证书（建议尽快替换为公司内部 CA 证书）
@@ -55,21 +55,21 @@ command -v python3 >/dev/null 2>&1 || install_pkgs
 command -v sqlite3 >/dev/null 2>&1 || install_pkgs || true
 command -v rsync >/dev/null 2>&1 || die "缺少 rsync，请先安装"
 
-# ---------- 选择 Python >= 3.11 ----------
+# ---------- 选择 Python >= 3.10 ----------
 pick_python() {
   local candidate
-  for candidate in python3.13 python3.12 python3.11 python3; do
+  for candidate in python3.13 python3.12 python3.11 python3.10 python3; do
     command -v "$candidate" >/dev/null 2>&1 || continue
     local ver
     ver="$("$candidate" -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')"
-    if [[ "$(echo "$ver" | awk -F. '{print ($1>3 || ($1==3 && $2>=11)) ? "ok" : "no"}')" == "ok" ]]; then
+    if [[ "$(echo "$ver" | awk -F. '{print ($1>3 || ($1==3 && $2>=10)) ? "ok" : "no"}')" == "ok" ]]; then
       echo "$candidate"; return 0
     fi
   done
   return 1
 }
-PY_BIN="$(pick_python)" || die "未找到 Python >= 3.11（项目要求 3.11+）。
-  Ubuntu 20.04 等老系统请启用 deadsnakes PPA 安装 python3.11，或升级系统后重试。"
+PY_BIN="$(pick_python)" || die "未找到 Python >= 3.10（项目要求 3.10+）。
+  Ubuntu 20.04 等老系统请启用 deadsnakes PPA 安装 python3.10+，或升级系统后重试。"
 info "使用 Python: $PY_BIN ($("$PY_BIN" --version))"
 
 # ---------- 专用系统账号 ----------
